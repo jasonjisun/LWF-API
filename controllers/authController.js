@@ -208,45 +208,47 @@ exports.verifyVerificationCode = async (req, res) => {
 exports.changePassword = async (req, res) => {
 	const { userId, verified } = req.user;
 	const { oldPassword, newPassword } = req.body;
+  
 	try {
-		const { error, value } = changePasswordSchema.validate({
-			oldPassword,
-			newPassword,
+
+	  const { error } = changePasswordSchema.validate({ oldPassword, newPassword });
+	  if (error) {
+		return res.status(401).json({ success: false, message: error.details[0].message });
+	  }
+  
+	  if (!verified) {
+		return res.status(401).json({ success: false, message: "You are not a verified user!" });
+	  }
+  
+	  const existingUser = await User.findOne({ _id: userId }).select("+password");
+	  if (!existingUser) {
+		return res.status(401).json({ success: false, message: "User does not exist!" });
+	  }
+  
+	  const isOldPasswordValid = await doHashValidation(oldPassword, existingUser.password);
+	  if (!isOldPasswordValid) {
+		return res.status(401).json({ success: false, message: "Invalid credentials!" });
+	  }
+  
+	  const isSamePassword = await doHashValidation(newPassword, existingUser.password);
+	  if (isSamePassword) {
+		return res.status(400).json({
+		  success: false,
+		  message: "You cannot use your existing password. Please choose a new one!",
 		});
-		if (error) {
-			return res
-				.status(401)
-				.json({ success: false, message: error.details[0].message });
-		}
-		if (!verified) {
-			return res
-				.status(401)
-				.json({ success: false, message: 'You are not verified user!' });
-		}
-		const existingUser = await User.findOne({ _id: userId }).select(
-			'+password'
-		);
-		if (!existingUser) {
-			return res
-				.status(401)
-				.json({ success: false, message: 'User does not exists!' });
-		}
-		const result = await doHashValidation(oldPassword, existingUser.password);
-		if (!result) {
-			return res
-				.status(401)
-				.json({ success: false, message: 'Invalid credentials!' });
-		}
-		const hashedPassword = await doHash(newPassword, 12);
-		existingUser.password = hashedPassword;
-		await existingUser.save();
-		return res
-			.status(200)
-			.json({ success: true, message: 'Password updated!!' });
+	  }
+
+	  const hashedPassword = await doHash(newPassword, 12);
+	  existingUser.password = hashedPassword;
+	  await existingUser.save();
+  
+	  return res.status(200).json({ success: true, message: "Password updated!" });
 	} catch (error) {
-		console.log(error);
+	  console.error("Error changing password:", error);
+	  res.status(500).json({ success: false, message: "Internal server error" });
 	}
-};
+  };
+  
 
 exports.sendForgotPasswordCode = async (req, res) => {
 	const { email } = req.body;
@@ -346,4 +348,22 @@ exports.verifyForgotPasswordCode = async (req, res) => {
 	} catch (error) {
 		console.log(error);
 	}
+};
+
+exports.loginSuccess = (req, res) => {
+    if (req.user) {
+        res.status(200).json({ success: true, message: "Successfully logged in", user: req.user });
+    } else {
+        res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+};
+
+exports.loginFailure = (req, res) => {
+    res.status(401).json({ success: false, message: "Login failed" });
+};
+
+exports.logoutUser = (req, res) => {
+    req.logout(() => {
+        res.status(200).json({ success: true, message: "Logged out successfully" });
+    });
 };

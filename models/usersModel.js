@@ -1,18 +1,21 @@
 const mongoose = require("mongoose");
 
-const userSchema = mongoose.Schema(
+const userSchema = new mongoose.Schema(
   {
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true, // Ensures uniqueness while allowing null values
+    },
     email: {
       type: String,
-      required: [true, "Email is required!"],
       trim: true,
-      unique: [true, "Email must be unique!"],
-      minLength: [5, "Email must have 5 characters!"],
+      unique: true, // Keeps email unique but not required (for Google users)
+      sparse: true, // Prevents indexing conflicts when missing
       lowercase: true,
     },
     password: {
       type: String,
-      required: [true, "Password must be provided!"],
       trim: true,
       select: false,
     },
@@ -41,5 +44,13 @@ const userSchema = mongoose.Schema(
     timestamps: true,
   }
 );
+
+// 📌 Ensures email is required **only** if no Google ID exists
+userSchema.pre("save", function (next) {
+  if (!this.googleId && !this.email) {
+    return next(new Error("Email is required for non-Google users!"));
+  }
+  next();
+});
 
 module.exports = mongoose.model("User", userSchema);

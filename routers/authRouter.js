@@ -1,7 +1,10 @@
 const express = require("express");
+const passport = require("passport");
 const authController = require("../controllers/authController");
 const { identifier } = require("../middlewares/identification");
 const router = express.Router();
+const { loginSuccess, loginFailure, logoutUser } = require("../controllers/authController");
+
 
 router.post("/signup", authController.signup);
 router.post("/signin", authController.signin);
@@ -26,5 +29,30 @@ router.patch(
   "/verify-forgot-password-code",
   authController.verifyForgotPasswordCode
 );
+
+// 🟢 Start Google OAuth flow
+router.get("/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+
+// 🟢 Google OAuth callback
+router.get(
+  "/google/callback",
+  passport.authenticate("google", { failureRedirect: "/auth/login/failure" }),
+  (req, res) => {
+    res.redirect("/auth/login/success"); // Redirect to success page after login
+  }
+);
+
+// 🟢 Login success route
+router.get("/login/success", loginSuccess);
+
+// 🔴 Login failure route
+router.get("/login/failure", loginFailure);
+
+// 🟢 Logout route
+router.get("/google/logout", (req, res) => {
+  req.logout(() => {
+    res.redirect("/"); // Redirect to home after logout
+  });
+});
 
 module.exports = router;
