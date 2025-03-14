@@ -49,10 +49,6 @@ router.get("/login/success", loginSuccess);
 router.get("/login/failure", loginFailure);
 
 // 🟢 Logout route
-router.get("/google/logout", (req, res) => {
-  req.logout(() => {
-    res.redirect("/"); // Redirect to home after logout
-  });
-});
+router.get("/google/logout",  logoutUser);
 
 module.exports = router;
