@@ -47,6 +47,7 @@ app.use("/users", userRoutes);
 app.use("/api/auth", authRouter);
 app.use("/auth", authRouter);
 
+
 // 🎯 Base API Route
 app.get("/", (req, res) => {
   res.json({ message: "🚀 Server is running!" });

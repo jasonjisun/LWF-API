@@ -11,9 +11,10 @@ exports.signupSchema = Joi.object({
   password: Joi.string()
     .required()
     .pattern(new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$")),
-  role: Joi.string()
-    .valid("admin", "staff", "patient")
-    .required(),
+  confirmPassword: Joi.string().valid(Joi.ref("password")).required().messages({
+    "any.only": "Passwords do not match!",
+  }),
+  role: Joi.string().valid("admin", "staff", "patient").required(),
 });
 
 exports.signinSchema = Joi.object({
@@ -42,12 +43,18 @@ exports.acceptCodeSchema = Joi.object({
 });
 
 exports.changePasswordSchema = Joi.object({
-  newPassword: Joi.string()
-    .required()
-    .pattern(new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$")),
   oldPassword: Joi.string()
     .required()
     .pattern(new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$")),
+  newPassword: Joi.string()
+    .required()
+    .pattern(new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$")),
+  confirmNewPassword: Joi.string()
+    .valid(Joi.ref("newPassword"))
+    .required()
+    .messages({
+      "any.only": "New passwords do not match!",
+    }),
 });
 
 exports.acceptFPCodeSchema = Joi.object({

@@ -13,10 +13,11 @@ const VALID_ROLES = ["admin", "staff", "patient"];
 
 // 📌 Signup (Register a New User)
 exports.signup = async (req, res) => {
-  const { email, password, role } = req.body;
+  const { email, password, confirmPassword, role } = req.body;
+
   try {
     // Validate input
-    const { error } = signupSchema.validate({ email, password, role });
+    const { error } = signupSchema.validate({ email, password, confirmPassword, role });
     if (error) {
       return res.status(401).json({ success: false, message: error.details[0].message });
     }
@@ -27,7 +28,7 @@ exports.signup = async (req, res) => {
       return res.status(401).json({ success: false, message: "User already exists!" });
     }
 
-    // Validate role (Prevent unauthorized roles)
+    // Validate role
     if (!VALID_ROLES.includes(role)) {
       return res.status(400).json({ success: false, message: "Invalid role specified!" });
     }
@@ -36,17 +37,10 @@ exports.signup = async (req, res) => {
     const hashedPassword = await doHash(password, 12);
 
     // Create new user
-    const newUser = new User({
-      email,
-      password: hashedPassword,
-      role, // Assign role
-    });
+    const newUser = new User({ email, password: hashedPassword, role });
 
     await newUser.save();
-    res.status(201).json({
-      success: true,
-      message: "Your account has been created successfully!",
-    });
+    res.status(201).json({ success: true, message: "Your account has been created successfully!" });
   } catch (error) {
     console.log("Signup Error:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
@@ -269,68 +263,49 @@ exports.verifyVerificationCode = async (req, res) => {
 
 exports.changePassword = async (req, res) => {
   const { userId, verified } = req.user;
-  const { oldPassword, newPassword } = req.body;
+  const { oldPassword, newPassword, confirmNewPassword } = req.body;
 
   try {
-    const { error } = changePasswordSchema.validate({
-      oldPassword,
-      newPassword,
-    });
+    const { error } = changePasswordSchema.validate({ oldPassword, newPassword, confirmNewPassword });
     if (error) {
-      return res
-        .status(401)
-        .json({ success: false, message: error.details[0].message });
+      return res.status(401).json({ success: false, message: error.details[0].message });
     }
 
     if (!verified) {
-      return res
-        .status(401)
-        .json({ success: false, message: "You are not a verified user!" });
+      return res.status(401).json({ success: false, message: "You are not a verified user!" });
     }
 
-    const existingUser = await User.findOne({ _id: userId }).select(
-      "+password"
-    );
+    const existingUser = await User.findOne({ _id: userId }).select("+password");
     if (!existingUser) {
-      return res
-        .status(401)
-        .json({ success: false, message: "User does not exist!" });
+      return res.status(401).json({ success: false, message: "User does not exist!" });
     }
 
-    const isOldPasswordValid = await doHashValidation(
-      oldPassword,
-      existingUser.password
-    );
+    // Validate old password
+    const isOldPasswordValid = await doHashValidation(oldPassword, existingUser.password);
     if (!isOldPasswordValid) {
-      return res
-        .status(401)
-        .json({ success: false, message: "Invalid credentials!" });
+      return res.status(401).json({ success: false, message: "Invalid current password!" });
     }
 
-    const isSamePassword = await doHashValidation(
-      newPassword,
-      existingUser.password
-    );
-    if (isSamePassword) {
+    // Check if new password is different from the old password
+    if (oldPassword === newPassword) {
       return res.status(400).json({
         success: false,
-        message:
-          "You cannot use your existing password. Please choose a new one!",
+        message: "New password must be different from the old password!",
       });
     }
 
+    // Hash and update new password
     const hashedPassword = await doHash(newPassword, 12);
     existingUser.password = hashedPassword;
     await existingUser.save();
 
-    return res
-      .status(200)
-      .json({ success: true, message: "Password updated!" });
+    return res.status(200).json({ success: true, message: "Password updated successfully!" });
   } catch (error) {
     console.error("Error changing password:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
+
 
 exports.sendForgotPasswordCode = async (req, res) => {
   const { email } = req.body;
