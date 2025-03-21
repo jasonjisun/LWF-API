@@ -10,12 +10,12 @@ exports.signupSchema = Joi.object({
     }),
   password: Joi.string()
     .required()
-    .pattern(new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*d).{8,}$")),
-  role: Joi
-  .string()
-  .valid("admin", "staff", "patient")
-  .required(),
+    .pattern(new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$")),
+  role: Joi.string()
+    .valid("admin", "staff", "patient")
+    .required(),
 });
+
 exports.signinSchema = Joi.object({
   email: Joi.string()
     .min(6)
@@ -26,7 +26,8 @@ exports.signinSchema = Joi.object({
     }),
   password: Joi.string()
     .required()
-    .pattern(new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*d).{8,}$")),
+    .pattern(new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$")),
+  rememberMe: Joi.boolean().optional(),
 });
 
 exports.acceptCodeSchema = Joi.object({
@@ -43,10 +44,10 @@ exports.acceptCodeSchema = Joi.object({
 exports.changePasswordSchema = Joi.object({
   newPassword: Joi.string()
     .required()
-    .pattern(new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*d).{8,}$")),
+    .pattern(new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$")),
   oldPassword: Joi.string()
     .required()
-    .pattern(new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*d).{8,}$")),
+    .pattern(new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$")),
 });
 
 exports.acceptFPCodeSchema = Joi.object({
@@ -60,5 +61,5 @@ exports.acceptFPCodeSchema = Joi.object({
   providedCode: Joi.number().required(),
   newPassword: Joi.string()
     .required()
-    .pattern(new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*d).{8,}$")),
+    .pattern(new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$")),
 });

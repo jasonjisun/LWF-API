@@ -55,7 +55,8 @@ exports.signup = async (req, res) => {
 
 // 📌 Signin (Login)
 exports.signin = async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, rememberMe } = req.body; // 🟢 Get "rememberMe" from request body
+
   try {
     // Validate input
     const { error } = signinSchema.validate({ email, password });
@@ -75,7 +76,11 @@ exports.signin = async (req, res) => {
       return res.status(401).json({ success: false, message: "Invalid credentials!" });
     }
 
-    // Generate JWT Token (Includes Role)
+    // Set token expiration based on "Remember Me"
+    const accessTokenExpiry = "8h"; // Access token always expires in 8 hours
+    const refreshTokenExpiry = rememberMe ? "30d" : "7d"; // 🔹 Longer refresh token for "Remember Me"
+
+    // Generate Access Token
     const token = jwt.sign(
       {
         userId: existingUser._id,
@@ -84,26 +89,74 @@ exports.signin = async (req, res) => {
         verified: existingUser.verified,
       },
       process.env.TOKEN_SECRET,
-      { expiresIn: "8h" }
+      { expiresIn: accessTokenExpiry }
     );
 
+    // Generate Refresh Token
+    const refreshToken = jwt.sign(
+      { userId: existingUser._id },
+      process.env.REFRESH_TOKEN_SECRET,
+      { expiresIn: refreshTokenExpiry }
+    );
+
+    // Set cookies with different lifetimes
     res
       .cookie("Authorization", "Bearer " + token, {
-        expires: new Date(Date.now() + 8 * 3600000),
-        httpOnly: process.env.NODE_ENV === "production",
+        expires: new Date(Date.now() + 8 * 3600000), // 8 hours
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+      })
+      .cookie("RefreshToken", refreshToken, {
+        expires: new Date(Date.now() + (rememberMe ? 30 : 7) * 24 * 3600000), // 30 days or 7 days
+        httpOnly: true,
         secure: process.env.NODE_ENV === "production",
       })
       .json({
         success: true,
         token,
-        role: existingUser.role, // Include role in response
+        refreshToken,
+        role: existingUser.role,
         message: "Logged in successfully!",
       });
+
   } catch (error) {
     console.log("Signin Error:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
+
+
+exports.refreshToken = async (req, res) => {
+  const refreshToken = req.cookies.RefreshToken; // 🟢 Read refresh token from cookie
+
+  if (!refreshToken) {
+    return res.status(403).json({ success: false, message: "No refresh token provided" });
+  }
+
+  try {
+    const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+
+    // Generate a new access token
+    const newToken = jwt.sign(
+      { userId: decoded.userId },
+      process.env.TOKEN_SECRET,
+      { expiresIn: "8h" }
+    );
+
+    res
+      .cookie("Authorization", "Bearer " + newToken, {
+        expires: new Date(Date.now() + 8 * 3600000), // New access token lasts 8 hours
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+      })
+      .json({ success: true, token: newToken });
+
+  } catch (error) {
+    res.status(403).json({ success: false, message: "Invalid refresh token" });
+  }
+};
+
+
 
 exports.signout = async (req, res) => {
   res

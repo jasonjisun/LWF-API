@@ -5,10 +5,10 @@ const { identifier } = require("../middlewares/identification");
 const router = express.Router();
 const { loginSuccess, loginFailure, logoutUser } = require("../controllers/authController");
 
-
 router.post("/signup", authController.signup);
 router.post("/signin", authController.signin);
 router.post("/signout", identifier, authController.signout);
+router.post("/refresh-token", identifier, authController.refreshToken);
 
 router.patch(
   "/send-verification-code",
@@ -29,6 +29,7 @@ router.patch(
   "/verify-forgot-password-code",
   authController.verifyForgotPasswordCode
 );
+
 
 // 🟢 Start Google OAuth flow
 router.get("/google", passport.authenticate("google", { scope: ["profile", "email"] }));
