@@ -8,9 +8,9 @@ const helmet = require("helmet");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const mongoose = require("mongoose");
-const userRoutes = require("./routers/userRoutes");
+const userRoutes = require("./routes/userRoutes");
 
-const authRoutes = require("./routers/authRoutes");
+const authRoutes = require("./routes/authRoutes");
 
 const app = express();
 
