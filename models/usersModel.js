@@ -5,13 +5,13 @@ const userSchema = new mongoose.Schema(
     googleId: {
       type: String,
       unique: true,
-      sparse: true, 
+      sparse: true,
     },
     email: {
       type: String,
       trim: true,
-      unique: true, 
-      sparse: true, 
+      unique: true,
+      sparse: true,
       lowercase: true,
     },
     password: {
@@ -19,10 +19,10 @@ const userSchema = new mongoose.Schema(
       trim: true,
       select: false,
     },
-    role:{
-    type: String,
-    enum: ["admin", "staff", "patient"],
-    required: true,
+    role: {
+      type: String,
+      enum: ["admin", "staff", "patient"],
+      required: true,
     },
     verified: {
       type: Boolean,

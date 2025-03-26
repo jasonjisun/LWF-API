@@ -14,7 +14,10 @@ exports.getAllUsers = async (req, res) => {
 exports.getUserProfile = async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
 
     res.status(200).json({ success: true, user });
   } catch (error) {
@@ -25,8 +28,13 @@ exports.getUserProfile = async (req, res) => {
 // Update user (Admin only)
 exports.updateUser = async (req, res) => {
   try {
-    const updatedUser = await User.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!updatedUser) return res.status(404).json({ success: false, message: "User not found" });
+    const updatedUser = await User.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+    });
+    if (!updatedUser)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
 
     res.status(200).json({ success: true, user: updatedUser });
   } catch (error) {
@@ -38,9 +46,14 @@ exports.updateUser = async (req, res) => {
 exports.deleteUser = async (req, res) => {
   try {
     const deletedUser = await User.findByIdAndDelete(req.params.id);
-    if (!deletedUser) return res.status(404).json({ success: false, message: "User not found" });
+    if (!deletedUser)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
 
-    res.status(200).json({ success: true, message: "User deleted successfully" });
+    res
+      .status(200)
+      .json({ success: true, message: "User deleted successfully" });
   } catch (error) {
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }

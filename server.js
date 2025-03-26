@@ -2,15 +2,15 @@ require("dotenv").config();
 require("./middlewares/passport");
 
 const express = require("express");
-const passport = require("passport"); 
+const passport = require("passport");
 const session = require("express-session");
 const helmet = require("helmet");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const mongoose = require("mongoose");
-const userRoutes = require("./routers/userRoutes"); 
+const userRoutes = require("./routers/userRoutes");
 
-const authRouter = require("./routers/authRouter.js");
+const authRoutes = require("./routers/authRoutes");
 
 const app = express();
 
@@ -44,9 +44,8 @@ mongoose
 
 // 📌 Authentication Routes
 app.use("/users", userRoutes);
-app.use("/api/auth", authRouter);
-app.use("/auth", authRouter);
-
+app.use("/api/auth", authRoutes);
+app.use("/auth", authRoutes);
 
 // 🎯 Base API Route
 app.get("/", (req, res) => {

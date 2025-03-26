@@ -4,7 +4,6 @@ const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const User = require("../models/usersModel");
 
-
 passport.serializeUser((user, done) => {
   done(null, user.id); // Store only the user ID in the session
 });

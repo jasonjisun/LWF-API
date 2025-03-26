@@ -1,7 +1,12 @@
 const express = require("express");
 const roleMiddleware = require("../middlewares/roleMiddleware");
 const { identifier } = require("../middlewares/identification"); // Ensure it's imported
-const { getAllUsers, getUserProfile, updateUser, deleteUser } = require("../controllers/userController");
+const {
+  getAllUsers,
+  getUserProfile,
+  updateUser,
+  deleteUser,
+} = require("../controllers/userController");
 
 const router = express.Router();
 
@@ -11,9 +16,19 @@ router.put("/update/:id", identifier, roleMiddleware(["admin"]), updateUser);
 router.delete("/delete/:id", identifier, roleMiddleware(["admin"]), deleteUser);
 
 // 🏥 Staff - Can view user details (read-only)
-router.get("/view/:id", identifier, roleMiddleware(["admin", "staff"]), getUserProfile);
+router.get(
+  "/view/:id",
+  identifier,
+  roleMiddleware(["admin", "staff"]),
+  getUserProfile
+);
 
 // 👤 Patient - Can only view their own profile
-router.get("/profile", identifier, roleMiddleware(["admin", "staff", "patient"]), getUserProfile);
+router.get(
+  "/profile",
+  identifier,
+  roleMiddleware(["admin", "staff", "patient"]),
+  getUserProfile
+);
 
 module.exports = router;

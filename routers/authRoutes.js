@@ -3,7 +3,11 @@ const passport = require("passport");
 const authController = require("../controllers/authController");
 const { identifier } = require("../middlewares/identification");
 const router = express.Router();
-const { loginSuccess, loginFailure, logoutUser } = require("../controllers/authController");
+const {
+  loginSuccess,
+  loginFailure,
+  logoutUser,
+} = require("../controllers/authController");
 
 router.post("/signup", authController.signup);
 router.post("/signin", authController.signin);
@@ -30,9 +34,11 @@ router.patch(
   authController.verifyForgotPasswordCode
 );
 
-
 // 🟢 Start Google OAuth flow
-router.get("/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+router.get(
+  "/google",
+  passport.authenticate("google", { scope: ["profile", "email"] })
+);
 
 // 🟢 Google OAuth callback
 router.get(
@@ -50,6 +56,6 @@ router.get("/login/success", loginSuccess);
 router.get("/login/failure", loginFailure);
 
 // 🟢 Logout route
-router.get("/google/logout",  logoutUser);
+router.get("/google/logout", logoutUser);
 
 module.exports = router;

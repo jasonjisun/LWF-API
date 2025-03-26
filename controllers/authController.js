@@ -17,20 +17,31 @@ exports.signup = async (req, res) => {
 
   try {
     // Validate input
-    const { error } = signupSchema.validate({ email, password, confirmPassword, role });
+    const { error } = signupSchema.validate({
+      email,
+      password,
+      confirmPassword,
+      role,
+    });
     if (error) {
-      return res.status(401).json({ success: false, message: error.details[0].message });
+      return res
+        .status(401)
+        .json({ success: false, message: error.details[0].message });
     }
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(401).json({ success: false, message: "User already exists!" });
+      return res
+        .status(401)
+        .json({ success: false, message: "User already exists!" });
     }
 
     // Validate role
     if (!VALID_ROLES.includes(role)) {
-      return res.status(400).json({ success: false, message: "Invalid role specified!" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid role specified!" });
     }
 
     // Hash password
@@ -40,7 +51,12 @@ exports.signup = async (req, res) => {
     const newUser = new User({ email, password: hashedPassword, role });
 
     await newUser.save();
-    res.status(201).json({ success: true, message: "Your account has been created successfully!" });
+    res
+      .status(201)
+      .json({
+        success: true,
+        message: "Your account has been created successfully!",
+      });
   } catch (error) {
     console.log("Signup Error:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
@@ -55,19 +71,28 @@ exports.signin = async (req, res) => {
     // Validate input
     const { error } = signinSchema.validate({ email, password });
     if (error) {
-      return res.status(401).json({ success: false, message: error.details[0].message });
+      return res
+        .status(401)
+        .json({ success: false, message: error.details[0].message });
     }
 
     // Find user
     const existingUser = await User.findOne({ email }).select("+password");
     if (!existingUser) {
-      return res.status(401).json({ success: false, message: "User does not exist!" });
+      return res
+        .status(401)
+        .json({ success: false, message: "User does not exist!" });
     }
 
     // Validate password
-    const isPasswordValid = await doHashValidation(password, existingUser.password);
+    const isPasswordValid = await doHashValidation(
+      password,
+      existingUser.password
+    );
     if (!isPasswordValid) {
-      return res.status(401).json({ success: false, message: "Invalid credentials!" });
+      return res
+        .status(401)
+        .json({ success: false, message: "Invalid credentials!" });
     }
 
     // Set token expiration based on "Remember Me"
@@ -112,19 +137,19 @@ exports.signin = async (req, res) => {
         role: existingUser.role,
         message: "Logged in successfully!",
       });
-
   } catch (error) {
     console.log("Signin Error:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
 
-
 exports.refreshToken = async (req, res) => {
   const refreshToken = req.cookies.RefreshToken; // 🟢 Read refresh token from cookie
 
   if (!refreshToken) {
-    return res.status(403).json({ success: false, message: "No refresh token provided" });
+    return res
+      .status(403)
+      .json({ success: false, message: "No refresh token provided" });
   }
 
   try {
@@ -144,13 +169,10 @@ exports.refreshToken = async (req, res) => {
         secure: process.env.NODE_ENV === "production",
       })
       .json({ success: true, token: newToken });
-
   } catch (error) {
     res.status(403).json({ success: false, message: "Invalid refresh token" });
   }
 };
-
-
 
 exports.signout = async (req, res) => {
   res
@@ -266,24 +288,41 @@ exports.changePassword = async (req, res) => {
   const { oldPassword, newPassword, confirmNewPassword } = req.body;
 
   try {
-    const { error } = changePasswordSchema.validate({ oldPassword, newPassword, confirmNewPassword });
+    const { error } = changePasswordSchema.validate({
+      oldPassword,
+      newPassword,
+      confirmNewPassword,
+    });
     if (error) {
-      return res.status(401).json({ success: false, message: error.details[0].message });
+      return res
+        .status(401)
+        .json({ success: false, message: error.details[0].message });
     }
 
     if (!verified) {
-      return res.status(401).json({ success: false, message: "You are not a verified user!" });
+      return res
+        .status(401)
+        .json({ success: false, message: "You are not a verified user!" });
     }
 
-    const existingUser = await User.findOne({ _id: userId }).select("+password");
+    const existingUser = await User.findOne({ _id: userId }).select(
+      "+password"
+    );
     if (!existingUser) {
-      return res.status(401).json({ success: false, message: "User does not exist!" });
+      return res
+        .status(401)
+        .json({ success: false, message: "User does not exist!" });
     }
 
     // Validate old password
-    const isOldPasswordValid = await doHashValidation(oldPassword, existingUser.password);
+    const isOldPasswordValid = await doHashValidation(
+      oldPassword,
+      existingUser.password
+    );
     if (!isOldPasswordValid) {
-      return res.status(401).json({ success: false, message: "Invalid current password!" });
+      return res
+        .status(401)
+        .json({ success: false, message: "Invalid current password!" });
     }
 
     // Check if new password is different from the old password
@@ -299,13 +338,14 @@ exports.changePassword = async (req, res) => {
     existingUser.password = hashedPassword;
     await existingUser.save();
 
-    return res.status(200).json({ success: true, message: "Password updated successfully!" });
+    return res
+      .status(200)
+      .json({ success: true, message: "Password updated successfully!" });
   } catch (error) {
     console.error("Error changing password:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
-
 
 exports.sendForgotPasswordCode = async (req, res) => {
   const { email } = req.body;
@@ -409,13 +449,11 @@ exports.verifyForgotPasswordCode = async (req, res) => {
 
 exports.loginSuccess = (req, res) => {
   if (req.user) {
-    res
-      .status(200)
-      .json({
-        success: true,
-        message: "Successfully logged in",
-        user: req.user,
-      });
+    res.status(200).json({
+      success: true,
+      message: "Successfully logged in",
+      user: req.user,
+    });
   } else {
     res.status(401).json({ success: false, message: "Not authenticated" });
   }
