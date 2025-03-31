@@ -45,9 +45,13 @@ router.get(
   "/google/callback",
   passport.authenticate("google", { failureRedirect: "/auth/login/failure" }),
   (req, res) => {
-    res.redirect("/auth/login/success"); // Redirect to success page after login
+    const token = req.user.token; // Get token from user session
+    const role = req.user.role; // Get user role
+
+    res.redirect(`http://localhost:5173/google-auth?token=${token}&role=${role}`);
   }
 );
+
 
 // 🟢 Login success route
 router.get("/login/success", loginSuccess);
