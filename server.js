@@ -16,7 +16,12 @@ const app = express();
 
 // 🔒 Security Middleware
 app.use(helmet());
-app.use(cors()); // Allows frontend requests
+app.use(
+  cors({
+    origin: "http://localhost:5173", // Change this to match your frontend URL
+    credentials: true, // Allow cookies/session sharing
+  })
+);
 app.use(cookieParser());
 
 // 🛠 Express Middleware

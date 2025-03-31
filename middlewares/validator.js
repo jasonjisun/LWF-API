@@ -10,11 +10,14 @@ exports.signupSchema = Joi.object({
     }),
   password: Joi.string()
     .required()
-    .pattern(new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$")),
+    .pattern(new RegExp("^.{8,16}$")) // Allows 8-16 characters, no other restrictions
+    .messages({
+      "string.pattern.base": "Password must be between 8-16 characters.",
+    }),
   confirmPassword: Joi.string().valid(Joi.ref("password")).required().messages({
     "any.only": "Passwords do not match!",
   }),
-  role: Joi.string().valid("admin", "staff", "patient").required(),
+  role: Joi.string().valid("admin", "staff", "patient").default("patient"),
 });
 
 exports.signinSchema = Joi.object({
@@ -27,7 +30,10 @@ exports.signinSchema = Joi.object({
     }),
   password: Joi.string()
     .required()
-    .pattern(new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$")),
+    .pattern(new RegExp("^.{8,16}$"))
+    .messages({
+      "string.pattern.base": "Password must be between 8-16 characters.",
+    }),
   rememberMe: Joi.boolean().optional(),
 });
 
@@ -45,10 +51,16 @@ exports.acceptCodeSchema = Joi.object({
 exports.changePasswordSchema = Joi.object({
   oldPassword: Joi.string()
     .required()
-    .pattern(new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$")),
+    .pattern(new RegExp("^.{8,16}$"))
+    .messages({
+      "string.pattern.base": "Password must be between 8-16 characters.",
+    }),
   newPassword: Joi.string()
     .required()
-    .pattern(new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$")),
+    .pattern(new RegExp("^.{8,16}$"))
+    .messages({
+      "string.pattern.base": "Password must be between 8-16 characters.",
+    }),
   confirmNewPassword: Joi.string()
     .valid(Joi.ref("newPassword"))
     .required()
@@ -68,5 +80,8 @@ exports.acceptFPCodeSchema = Joi.object({
   providedCode: Joi.number().required(),
   newPassword: Joi.string()
     .required()
-    .pattern(new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$")),
+    .pattern(new RegExp("^.{8,16}$"))
+    .messages({
+      "string.pattern.base": "Password must be between 8-16 characters.",
+    }),
 });

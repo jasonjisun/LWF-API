@@ -16,49 +16,35 @@ exports.signup = async (req, res) => {
   const { email, password, confirmPassword, role } = req.body;
 
   try {
-    // Validate input
-    const { error } = signupSchema.validate({
-      email,
-      password,
-      confirmPassword,
-      role,
-    });
+    // Validate input (excluding role)
+    const { error } = signupSchema.validate({ email, password, confirmPassword });
     if (error) {
-      return res
-        .status(401)
-        .json({ success: false, message: error.details[0].message });
+      return res.status(401).json({ success: false, message: error.details[0].message });
     }
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res
-        .status(401)
-        .json({ success: false, message: "User already exists!" });
+      return res.status(401).json({ success: false, message: "User already exists!" });
     }
 
-    // Validate role
-    if (!VALID_ROLES.includes(role)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid role specified!" });
-    }
+    // Assign "patient" as the default role if not provided
+    const assignedRole = role && VALID_ROLES.includes(role) ? role : "patient";
 
     // Hash password
     const hashedPassword = await doHash(password, 12);
 
     // Create new user
-    const newUser = new User({ email, password: hashedPassword, role });
+    const newUser = new User({ email, password: hashedPassword, role: assignedRole });
 
     await newUser.save();
-    res
-      .status(201)
-      .json({
-        success: true,
-        message: "Your account has been created successfully!",
-      });
+    res.status(201).json({
+      success: true,
+      message: "Your account has been created successfully!",
+      role: newUser.role, // Return role for frontend use
+    });
   } catch (error) {
-    console.log("Signup Error:", error);
+    console.error("Signup Error:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
@@ -176,10 +162,12 @@ exports.refreshToken = async (req, res) => {
 
 exports.signout = async (req, res) => {
   res
-    .clearCookie("Authorization")
+    .clearCookie("Authorization", { httpOnly: true, secure: true, sameSite: "None" })
+    .clearCookie("RefreshToken", { httpOnly: true, secure: true, sameSite: "None" })
     .status(200)
-    .json({ success: true, message: "logged out successfully" });
+    .json({ success: true, message: "Logged out successfully" });
 };
+
 
 exports.sendVerificationCode = async (req, res) => {
   const { email } = req.body;
