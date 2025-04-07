@@ -1,60 +1,42 @@
-const User = require("../models/usersModel"); // Ensure this path is correct
+const userService = require("../services/userService");
+const successHandler = require("../utils/successHandler");
+const errorHandler = require("../utils/errorHandler");
 
-// Get all users (Admin only)
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find();
-    res.status(200).json({ success: true, users });
+    const users = await userService.getAllUsers();
+    successHandler(res, { users });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Internal Server Error" });
+    errorHandler(res, { status: 500, message: error.message });
   }
 };
 
-// Get user profile (Staff/Admin)
 exports.getUserProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
-    if (!user)
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
-
-    res.status(200).json({ success: true, user });
+    const user = await userService.getUserProfile(req.params.id);
+    if (!user) return errorHandler(res, { status: 404, message: "User not found" });
+    successHandler(res, { user });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Internal Server Error" });
+    errorHandler(res, { status: 500, message: error.message });
   }
 };
 
-// Update user (Admin only)
 exports.updateUser = async (req, res) => {
   try {
-    const updatedUser = await User.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-    });
-    if (!updatedUser)
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
-
-    res.status(200).json({ success: true, user: updatedUser });
+    const updatedUser = await userService.updateUser(req.params.id, req.body);
+    if (!updatedUser) return errorHandler(res, { status: 404, message: "User not found" });
+    successHandler(res, { user: updatedUser });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Internal Server Error" });
+    errorHandler(res, { status: 500, message: error.message });
   }
 };
 
-// Delete user (Admin only)
 exports.deleteUser = async (req, res) => {
   try {
-    const deletedUser = await User.findByIdAndDelete(req.params.id);
-    if (!deletedUser)
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
-
-    res
-      .status(200)
-      .json({ success: true, message: "User deleted successfully" });
+    const deletedUser = await userService.deleteUser(req.params.id);
+    if (!deletedUser) return errorHandler(res, { status: 404, message: "User not found" });
+    successHandler(res, { message: "User deleted successfully" });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Internal Server Error" });
+    errorHandler(res, { status: 500, message: error.message });
   }
 };

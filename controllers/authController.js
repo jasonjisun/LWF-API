@@ -1,458 +1,167 @@
-const jwt = require("jsonwebtoken");
-const {
-  signupSchema,
-  signinSchema,
-  acceptCodeSchema,
-  changePasswordSchema,
-  acceptFPCodeSchema,
-} = require("../middlewares/validator");
-const User = require("../models/usersModel");
-const { doHash, doHashValidation, hmacProcess } = require("../utils/hashing");
-const transport = require("../middlewares/sendMail");
-const VALID_ROLES = ["admin", "staff", "patient"];
+const authService = require("../services/authService");
+const { signupSchema, signinSchema, changePasswordSchema, acceptFPCodeSchema } = require("../middlewares/validator");
+const successHandler = require("../utils/successHandler");
+const errorHandler = require("../utils/errorHandler");
 
-// 📌 Signup (Register a New User)
 exports.signup = async (req, res) => {
-  const { email, password, confirmPassword, role } = req.body;
+  const { error } = signupSchema.validate(req.body);
+  if (error) return errorHandler(res, { status: 400, message: error.details.map(err => err.message).join(", ") });
 
   try {
-    // Validate input (excluding role)
-    const { error } = signupSchema.validate({ email, password, confirmPassword });
-    if (error) {
-      return res.status(401).json({ success: false, message: error.details[0].message });
-    }
-
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(401).json({ success: false, message: "User already exists!" });
-    }
-
-    // Assign "patient" as the default role if not provided
-    const assignedRole = role && VALID_ROLES.includes(role) ? role : "patient";
-
-    // Hash password
-    const hashedPassword = await doHash(password, 12);
-
-    // Create new user
-    const newUser = new User({ email, password: hashedPassword, role: assignedRole });
-
-    await newUser.save();
-    res.status(201).json({
-      success: true,
-      message: "Your account has been created successfully!",
-      role: newUser.role, // Return role for frontend use
-    });
-  } catch (error) {
-    console.error("Signup Error:", error);
-    res.status(500).json({ success: false, message: "Internal server error" });
+    const result = await authService.signup(req.body);
+    successHandler(res, result);
+  } catch (err) {
+    errorHandler(res, { status: 500, message: "Signup failed, please try again." });
   }
 };
 
-// 📌 Signin (Login)
 exports.signin = async (req, res) => {
-  const { email, password, rememberMe } = req.body; // 🟢 Get "rememberMe" from request body
+  const { email, password, rememberMe } = req.body;  
 
   try {
-    // Validate input
-    const { error } = signinSchema.validate({ email, password });
-    if (error) {
-      return res
-        .status(401)
-        .json({ success: false, message: error.details[0].message });
-    }
+    // Call authService to validate the user credentials and generate the tokens
+    const result = await authService.signin({ email, password, rememberMe });
 
-    // Find user
-    const existingUser = await User.findOne({ email }).select("+password");
-    if (!existingUser) {
-      return res
-        .status(401)
-        .json({ success: false, message: "User does not exist!" });
-    }
+    if (result.success) {
+      // Define expiration times for the cookies (use longer expiration for refresh token)
+      const accessTokenExpiration = "1h"; // Access token expires in 1 hour
+      const refreshTokenExpiration = rememberMe ? "7d" : "1d"; // Refresh token expires in 7 days if rememberMe is true, else 1 day
 
-    // Validate password
-    const isPasswordValid = await doHashValidation(
-      password,
-      existingUser.password
-    );
-    if (!isPasswordValid) {
-      return res
-        .status(401)
-        .json({ success: false, message: "Invalid credentials!" });
-    }
-
-    // Set token expiration based on "Remember Me"
-    const accessTokenExpiry = "8h"; // Access token always expires in 8 hours
-    const refreshTokenExpiry = rememberMe ? "30d" : "7d"; // 🔹 Longer refresh token for "Remember Me"
-
-    // Generate Access Token
-    const token = jwt.sign(
-      {
-        userId: existingUser._id,
-        email: existingUser.email,
-        role: existingUser.role,
-        verified: existingUser.verified,
-      },
-      process.env.TOKEN_SECRET,
-      { expiresIn: accessTokenExpiry }
-    );
-
-    // Generate Refresh Token
-    const refreshToken = jwt.sign(
-      { userId: existingUser._id },
-      process.env.REFRESH_TOKEN_SECRET,
-      { expiresIn: refreshTokenExpiry }
-    );
-
-    // Set cookies with different lifetimes
-    res
-      .cookie("Authorization", "Bearer " + token, {
-        expires: new Date(Date.now() + 8 * 3600000), // 8 hours
+      res.cookie("Authorization", result.token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-      })
-      .cookie("RefreshToken", refreshToken, {
-        expires: new Date(Date.now() + (rememberMe ? 30 : 7) * 24 * 3600000), // 30 days or 7 days
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-      })
-      .json({
-        success: true,
-        token,
-        refreshToken,
-        role: existingUser.role,
-        message: "Logged in successfully!",
+        secure: process.env.NODE_ENV === 'production',  // Set secure flag for production
+        maxAge: 1000 * 60 * 60, // 1 hour expiration for the access token
+        sameSite: 'Strict',  // Prevent CSRF by setting SameSite to Strict
       });
-  } catch (error) {
-    console.log("Signin Error:", error);
-    res.status(500).json({ success: false, message: "Internal server error" });
+
+      res.cookie("RefreshToken", result.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production', // Set secure flag for production
+        maxAge: rememberMe ? 1000 * 60 * 60 * 24 * 7 : 1000 * 60 * 60 * 24, // Set refresh token expiration based on rememberMe
+        sameSite: 'Strict',  // Prevent CSRF by setting SameSite to Strict
+      });
+
+      // Return the success response with the result from authService
+      successHandler(res, result);
+    } else {
+      // Return error if authentication failed
+      errorHandler(res, { status: result.status, message: result.message });
+    }
+  } catch (err) {
+    // Catch any unexpected errors and return an internal server error
+    console.error("Signin Error:", err.message);
+    errorHandler(res, { status: 500, message: "Signin failed. Please try again." });
   }
 };
+
 
 exports.refreshToken = async (req, res) => {
-  const refreshToken = req.cookies.RefreshToken; // 🟢 Read refresh token from cookie
+  const token = req.cookies.RefreshToken;
 
-  if (!refreshToken) {
-    return res
-      .status(403)
-      .json({ success: false, message: "No refresh token provided" });
+  if (!token) {
+    return errorHandler(res, { status: 403, message: "No refresh token provided." });
   }
 
   try {
-    const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+    const result = await authService.refreshToken(token);
 
-    // Generate a new access token
-    const newToken = jwt.sign(
-      { userId: decoded.userId },
-      process.env.TOKEN_SECRET,
-      { expiresIn: "8h" }
-    );
+    // If the refresh token is valid, send the new access token
+    if (result.success) {
+      return successHandler(res, result);  // Returns the new token to the client
+    }
 
-    res
-      .cookie("Authorization", "Bearer " + newToken, {
-        expires: new Date(Date.now() + 8 * 3600000), // New access token lasts 8 hours
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-      })
-      .json({ success: true, token: newToken });
-  } catch (error) {
-    res.status(403).json({ success: false, message: "Invalid refresh token" });
+    // If something went wrong in the service, handle the error
+    return errorHandler(res, { status: result.status, message: result.message });
+  } catch (err) {
+    console.error("Error refreshing token:", err.message);
+    return errorHandler(res, { status: 500, message: "Internal server error." });
   }
 };
 
 exports.signout = async (req, res) => {
-  res
-    .clearCookie("Authorization", { httpOnly: true, secure: true, sameSite: "None" })
-    .clearCookie("RefreshToken", { httpOnly: true, secure: true, sameSite: "None" })
-    .status(200)
-    .json({ success: true, message: "Logged out successfully" });
+  try {
+    res.clearCookie("Authorization");
+    res.clearCookie("RefreshToken");
+    successHandler(res, { message: "Logged out successfully." });
+  } catch (err) {
+    errorHandler(res, { status: 500, message: "Internal server error." });
+  }
 };
-
 
 exports.sendVerificationCode = async (req, res) => {
   const { email } = req.body;
+
   try {
-    const existingUser = await User.findOne({ email });
-    if (!existingUser) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User does not exists!" });
-    }
-    if (existingUser.verified) {
-      return res
-        .status(400)
-        .json({ success: false, message: "You are already verified!" });
-    }
-
-    const codeValue = Math.floor(Math.random() * 1000000).toString();
-    let info = await transport.sendMail({
-      from: process.env.NODE_CODE_SENDING_EMAIL_ADDRESS,
-      to: existingUser.email,
-      subject: "verification code",
-      html: "<h1>" + codeValue + "</h1>",
-    });
-
-    if (info.accepted[0] === existingUser.email) {
-      const hashedCodeValue = hmacProcess(
-        codeValue,
-        process.env.HMAC_VERIFICATION_CODE_SECRET
-      );
-      existingUser.verificationCode = hashedCodeValue;
-      existingUser.verificationCodeValidation = Date.now();
-      await existingUser.save();
-      return res.status(200).json({ success: true, message: "Code sent!" });
-    }
-    res.status(400).json({ success: false, message: "Code sent failed!" });
-  } catch (error) {
-    console.log(error);
+    const result = await authService.sendVerificationCode(email);
+    result.success ? successHandler(res, result) : errorHandler(res, result);
+  } catch (err) {
+    errorHandler(res, { status: 500, message: "Internal server error." });
   }
 };
 
 exports.verifyVerificationCode = async (req, res) => {
   const { email, providedCode } = req.body;
+
   try {
-    const { error, value } = acceptCodeSchema.validate({ email, providedCode });
-    if (error) {
-      return res
-        .status(401)
-        .json({ success: false, message: error.details[0].message });
-    }
-
-    const codeValue = providedCode.toString();
-    const existingUser = await User.findOne({ email }).select(
-      "+verificationCode +verificationCodeValidation"
-    );
-
-    if (!existingUser) {
-      return res
-        .status(401)
-        .json({ success: false, message: "User does not exists!" });
-    }
-    if (existingUser.verified) {
-      return res
-        .status(400)
-        .json({ success: false, message: "you are already verified!" });
-    }
-
-    if (
-      !existingUser.verificationCode ||
-      !existingUser.verificationCodeValidation
-    ) {
-      return res
-        .status(400)
-        .json({ success: false, message: "something is wrong with the code!" });
-    }
-
-    if (Date.now() - existingUser.verificationCodeValidation > 5 * 60 * 1000) {
-      return res
-        .status(400)
-        .json({ success: false, message: "code has been expired!" });
-    }
-
-    const hashedCodeValue = hmacProcess(
-      codeValue,
-      process.env.HMAC_VERIFICATION_CODE_SECRET
-    );
-
-    if (hashedCodeValue === existingUser.verificationCode) {
-      existingUser.verified = true;
-      existingUser.verificationCode = undefined;
-      existingUser.verificationCodeValidation = undefined;
-      await existingUser.save();
-      return res
-        .status(200)
-        .json({ success: true, message: "your account has been verified!" });
-    }
-    return res
-      .status(400)
-      .json({ success: false, message: "unexpected occured!!" });
-  } catch (error) {
-    console.log(error);
+    const result = await authService.verifyVerificationCode({ email, providedCode });
+    result.success ? successHandler(res, result) : errorHandler(res, result);
+  } catch (err) {
+    errorHandler(res, { status: 500, message: "Internal server error." });
   }
 };
 
 exports.changePassword = async (req, res) => {
-  const { userId, verified } = req.user;
+  const { userId, verified } = req.user; // This will now have the userId and verified fields
   const { oldPassword, newPassword, confirmNewPassword } = req.body;
 
+  if (newPassword !== confirmNewPassword) return errorHandler(res, { status: 400, message: "Passwords do not match." });
+  if (newPassword.length < 8) return errorHandler(res, { status: 400, message: "Password must be at least 8 characters long." });
+
   try {
-    const { error } = changePasswordSchema.validate({
-      oldPassword,
-      newPassword,
-      confirmNewPassword,
-    });
-    if (error) {
-      return res
-        .status(401)
-        .json({ success: false, message: error.details[0].message });
-    }
-
-    if (!verified) {
-      return res
-        .status(401)
-        .json({ success: false, message: "You are not a verified user!" });
-    }
-
-    const existingUser = await User.findOne({ _id: userId }).select(
-      "+password"
-    );
-    if (!existingUser) {
-      return res
-        .status(401)
-        .json({ success: false, message: "User does not exist!" });
-    }
-
-    // Validate old password
-    const isOldPasswordValid = await doHashValidation(
-      oldPassword,
-      existingUser.password
-    );
-    if (!isOldPasswordValid) {
-      return res
-        .status(401)
-        .json({ success: false, message: "Invalid current password!" });
-    }
-
-    // Check if new password is different from the old password
-    if (oldPassword === newPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "New password must be different from the old password!",
-      });
-    }
-
-    // Hash and update new password
-    const hashedPassword = await doHash(newPassword, 12);
-    existingUser.password = hashedPassword;
-    await existingUser.save();
-
-    return res
-      .status(200)
-      .json({ success: true, message: "Password updated successfully!" });
+    const result = await authService.changePassword({ userId, verified }, { oldPassword, newPassword });
+    successHandler(res, result);
   } catch (error) {
-    console.error("Error changing password:", error);
-    res.status(500).json({ success: false, message: "Internal server error" });
+    errorHandler(res, { status: 500, message: "Internal server error" });
   }
 };
 
+
 exports.sendForgotPasswordCode = async (req, res) => {
-  const { email } = req.body;
   try {
-    const existingUser = await User.findOne({ email });
-    if (!existingUser) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User does not exists!" });
-    }
-
-    const codeValue = Math.floor(Math.random() * 1000000).toString();
-    let info = await transport.sendMail({
-      from: process.env.NODE_CODE_SENDING_EMAIL_ADDRESS,
-      to: existingUser.email,
-      subject: "Forgot password code",
-      html: "<h1>" + codeValue + "</h1>",
-    });
-
-    if (info.accepted[0] === existingUser.email) {
-      const hashedCodeValue = hmacProcess(
-        codeValue,
-        process.env.HMAC_VERIFICATION_CODE_SECRET
-      );
-      existingUser.forgotPasswordCode = hashedCodeValue;
-      existingUser.forgotPasswordCodeValidation = Date.now();
-      await existingUser.save();
-      return res.status(200).json({ success: true, message: "Code sent!" });
-    }
-    res.status(400).json({ success: false, message: "Code sent failed!" });
+    const result = await authService.sendForgotPasswordCode(req.body.email);
+    successHandler(res, result);
   } catch (error) {
-    console.log(error);
+    errorHandler(res, { status: 500, message: "Internal server error" });
   }
 };
 
 exports.verifyForgotPasswordCode = async (req, res) => {
-  const { email, providedCode, newPassword } = req.body;
   try {
-    const { error, value } = acceptFPCodeSchema.validate({
-      email,
-      providedCode,
-      newPassword,
-    });
-    if (error) {
-      return res
-        .status(401)
-        .json({ success: false, message: error.details[0].message });
-    }
-
-    const codeValue = providedCode.toString();
-    const existingUser = await User.findOne({ email }).select(
-      "+forgotPasswordCode +forgotPasswordCodeValidation"
-    );
-
-    if (!existingUser) {
-      return res
-        .status(401)
-        .json({ success: false, message: "User does not exists!" });
-    }
-
-    if (
-      !existingUser.forgotPasswordCode ||
-      !existingUser.forgotPasswordCodeValidation
-    ) {
-      return res
-        .status(400)
-        .json({ success: false, message: "something is wrong with the code!" });
-    }
-
-    if (
-      Date.now() - existingUser.forgotPasswordCodeValidation >
-      5 * 60 * 1000
-    ) {
-      return res
-        .status(400)
-        .json({ success: false, message: "code has been expired!" });
-    }
-
-    const hashedCodeValue = hmacProcess(
-      codeValue,
-      process.env.HMAC_VERIFICATION_CODE_SECRET
-    );
-
-    if (hashedCodeValue === existingUser.forgotPasswordCode) {
-      const hashedPassword = await doHash(newPassword, 12);
-      existingUser.password = hashedPassword;
-      existingUser.forgotPasswordCode = undefined;
-      existingUser.forgotPasswordCodeValidation = undefined;
-      await existingUser.save();
-      return res
-        .status(200)
-        .json({ success: true, message: "Password updated!!" });
-    }
-    return res
-      .status(400)
-      .json({ success: false, message: "unexpected occured!!" });
+    const { email, providedCode, newPassword } = req.body;
+    const result = await authService.verifyForgotPasswordCode({ email, providedCode, newPassword });
+    successHandler(res, result);
   } catch (error) {
-    console.log(error);
+    errorHandler(res, { status: 500, message: "Internal server error" });
   }
 };
 
 exports.loginSuccess = (req, res) => {
   if (req.user) {
-    res.status(200).json({
-      success: true,
-      message: "Successfully logged in",
-      user: req.user,
-    });
+    successHandler(res, { message: "Successfully logged in", user: req.user });
   } else {
-    res.status(401).json({ success: false, message: "Not authenticated" });
+    errorHandler(res, { status: 401, message: "Not authenticated" });
   }
 };
 
 exports.loginFailure = (req, res) => {
-  res.status(401).json({ success: false, message: "Login failed" });
+  errorHandler(res, { status: 401, message: "Login failed" });
 };
 
 exports.logoutUser = (req, res) => {
-  req.logout(() => {
-    res.status(200).json({ success: true, message: "Logged out successfully" });
+  req.logout((err) => {
+    if (err) {
+      return errorHandler(res, { status: 500, message: "Failed to log out" });
+    }
+    successHandler(res, { message: "Logged out successfully" });
   });
 };

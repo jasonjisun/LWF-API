@@ -17,7 +17,7 @@ exports.signupSchema = Joi.object({
   confirmPassword: Joi.string().valid(Joi.ref("password")).required().messages({
     "any.only": "Passwords do not match!",
   }),
-  role: Joi.string().valid("admin", "staff", "patient").default("patient"),
+  role: Joi.string().valid("admin", "doctor", "patient").default("patient"),
 });
 
 exports.signinSchema = Joi.object({
