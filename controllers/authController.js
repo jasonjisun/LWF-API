@@ -51,7 +51,7 @@ exports.signup = async (req, res) => {
 
 // 📌 Signin (Login)
 exports.signin = async (req, res) => {
-  const { email, password, rememberMe } = req.body; // 🟢 Get "rememberMe" from request body
+  const { email, password, rememberMe } = req.body;
 
   try {
     // Validate input

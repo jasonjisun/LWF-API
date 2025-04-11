@@ -1,7 +1,7 @@
 const express = require("express");
 const passport = require("passport");
 const authController = require("../controllers/authController");
-const { identifier } = require("../middlewares/identification");
+const verifyJWT = require("../middlewares/verifyJWT");
 const router = express.Router();
 const {
   loginSuccess,
@@ -11,20 +11,12 @@ const {
 
 router.post("/signup", authController.signup);
 router.post("/signin", authController.signin);
-router.post("/signout", identifier, authController.signout);
-router.post("/refresh-token", identifier, authController.refreshToken);
+router.post("/signout", verifyJWT(), authController.signout);
+router.post("/refresh-token", verifyJWT(), authController.refreshToken);
 
-router.patch(
-  "/send-verification-code",
-  identifier,
-  authController.sendVerificationCode
-);
-router.patch(
-  "/verify-verification-code",
-  identifier,
-  authController.verifyVerificationCode
-);
-router.patch("/change-password", identifier, authController.changePassword);
+router.patch("/send-verification-code", verifyJWT(), authController.sendVerificationCode);
+router.patch("/verify-verification-code", verifyJWT(), authController.verifyVerificationCode);
+router.patch("/change-password", verifyJWT(), authController.changePassword);
 router.patch(
   "/send-forgot-password-code",
   authController.sendForgotPasswordCode

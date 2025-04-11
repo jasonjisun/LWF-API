@@ -9,8 +9,9 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const mongoose = require("mongoose");
 const userRoutes = require("./routes/userRoutes");
-
 const authRoutes = require("./routes/authRoutes");
+const emrRoutes = require("./routes/emrRoutes");
+
 
 const app = express();
 
@@ -51,6 +52,7 @@ mongoose
 app.use("/users", userRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/auth", authRoutes);
+app.use("/api/emr", emrRoutes);
 
 // 🎯 Base API Route
 app.get("/", (req, res) => {

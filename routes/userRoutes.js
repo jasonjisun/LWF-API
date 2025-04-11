@@ -1,6 +1,5 @@
 const express = require("express");
-const roleMiddleware = require("../middlewares/roleMiddleware");
-const { identifier } = require("../middlewares/identification"); // Ensure it's imported
+const verifyJWT = require("../middlewares/verifyJWT");
 const {
   getAllUsers,
   getUserProfile,
@@ -11,24 +10,14 @@ const {
 const router = express.Router();
 
 // 👑 Admin - Can view & manage all users
-router.get("/all", identifier, roleMiddleware(["admin"]), getAllUsers);
-router.put("/update/:id", identifier, roleMiddleware(["admin"]), updateUser);
-router.delete("/delete/:id", identifier, roleMiddleware(["admin"]), deleteUser);
+router.get("/all", verifyJWT(["admin"]), getAllUsers);
+router.put("/update/:id", verifyJWT(["admin"]), updateUser);
+router.delete("/delete/:id", verifyJWT(["admin"]), deleteUser);
 
 // 🏥 Doctor - Can view user details (read-only)
-router.get(
-  "/view/:id",
-  identifier,
-  roleMiddleware(["admin", "doctor"]),
-  getUserProfile
-);
+router.get("/view/:id", verifyJWT(["admin", "doctor"]), getUserProfile);
 
 // 👤 Patient - Can only view their own profile
-router.get(
-  "/profile",
-  identifier,
-  roleMiddleware(["admin", "doctor", "patient"]),
-  getUserProfile
-);
+router.get("/profile", verifyJWT(["admin", "doctor", "patient"]), getUserProfile);
 
 module.exports = router;

@@ -1,14 +1,24 @@
 const express = require("express");
-const { identifier } = require("../middlewares/identification");
-const roleMiddleware = require("../middlewares/roleMiddleware");
-const { getEMRByUserId, upsertEMR } = require("../controllers/emrController");
+const verifyJWT = require("../middlewares/verifyJWT");
+const {
+  getEMRByUserId,
+  upsertEMR,
+  getOwnEMR,
+  updateOwnEMR,
+} = require("../controllers/emrController");
 
 const router = express.Router();
 
-// Doctor/Admin can fetch EMR for any patient
-router.get("/:id", identifier, roleMiddleware(["doctor", "admin"]), getEMRByUserId);
+// 🧑‍⚕️ Doctor/Admin: Get EMR by any user ID
+router.get("/:id", verifyJWT(["doctor", "admin"]), getEMRByUserId);
 
-// Optional: Create or update EMR
-router.post("/", identifier, roleMiddleware(["doctor", "admin"]), upsertEMR);
+// 🧑‍⚕️ Doctor/Admin: Create or update EMR for any user
+router.post("/", verifyJWT(["doctor", "admin"]), upsertEMR);
+
+// 👤 Patient: Get their own EMR
+router.get("/", verifyJWT(["patient"]), getOwnEMR);
+
+// 👤 Patient: Update their own EMR (only editable fields)
+router.put("/", verifyJWT(["patient"]), updateOwnEMR);
 
 module.exports = router;
