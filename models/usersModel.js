@@ -21,8 +21,8 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["admin", "staff", "patient"],
-      default: "patient", // 🔹 Auto-assigns "patient"
+      enum: ["admin", "doctor", "patient"],
+      default: "patient",
     },    
     verified: {
       type: Boolean,

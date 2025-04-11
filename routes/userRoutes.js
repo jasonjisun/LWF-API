@@ -15,11 +15,11 @@ router.get("/all", identifier, roleMiddleware(["admin"]), getAllUsers);
 router.put("/update/:id", identifier, roleMiddleware(["admin"]), updateUser);
 router.delete("/delete/:id", identifier, roleMiddleware(["admin"]), deleteUser);
 
-// 🏥 Staff - Can view user details (read-only)
+// 🏥 Doctor - Can view user details (read-only)
 router.get(
   "/view/:id",
   identifier,
-  roleMiddleware(["admin", "staff"]),
+  roleMiddleware(["admin", "doctor"]),
   getUserProfile
 );
 
@@ -27,7 +27,7 @@ router.get(
 router.get(
   "/profile",
   identifier,
-  roleMiddleware(["admin", "staff", "patient"]),
+  roleMiddleware(["admin", "doctor", "patient"]),
   getUserProfile
 );
 

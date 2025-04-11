@@ -10,7 +10,7 @@ exports.getAllUsers = async (req, res) => {
   }
 };
 
-// Get user profile (Staff/Admin)
+// Get user profile (Doctor/Admin)
 exports.getUserProfile = async (req, res) => {
   try {
     const user = await User.findById(req.params.id);

@@ -9,7 +9,7 @@ const {
 const User = require("../models/usersModel");
 const { doHash, doHashValidation, hmacProcess } = require("../utils/hashing");
 const transport = require("../middlewares/sendMail");
-const VALID_ROLES = ["admin", "staff", "patient"];
+const VALID_ROLES = ["admin", "doctor", "patient"];
 
 // 📌 Signup (Register a New User)
 exports.signup = async (req, res) => {
