@@ -1,67 +1,79 @@
 const Appointment = require('../models/appointmentModel');
+const Availability = require('../models/availabilityModel');
 
+// Dashboard data for doctor
 exports.getDoctorDashboardData = async (req, res) => {
   try {
+    const today = new Date();
     const todayAppointments = await Appointment.countDocuments({
-      doctor: req.user._id,
-      scheduledDateTime: { $gte: new Date() },
-    });
-    const sessionsToday = await Appointment.countDocuments({
-      doctor: req.user._id,
-      sessionDate: { $gte: new Date() },
+      doctor: req.user._id, // Use doctor field (not doctorId)
+      scheduledDateTime: { $gte: today },
     });
 
-    res.json({
-      todayAppointments,
-      sessionsToday,
+    const sessionsToday = await Appointment.countDocuments({
+      doctor: req.user._id, // Use doctor field (not doctorId)
+      sessionDate: { $gte: today },
     });
+
+    res.json({ todayAppointments, sessionsToday });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching doctor dashboard data' });
   }
 };
 
+// Get all appointments for logged-in doctor
 exports.getAppointments = async (req, res) => {
-    try {
-        const doctorId = req.user.id; // Assuming you're using authentication
-
-        const appointments = await Appointment.find({ doctorId });
-
-        res.status(200).json({ appointments });
-    } catch (error) {
-        console.error("Error fetching doctor appointments: ", error);
-        res.status(500).json({ message: "Error fetching doctor appointments." });
-    }
+  try {
+    const appointments = await Appointment.find({ doctor: req.user._id }).sort({ scheduledDateTime: 1 }); // Use doctor field (not doctorId)
+    res.status(200).json({ appointments });
+  } catch (error) {
+    console.error("Error fetching doctor appointments:", error);
+    res.status(500).json({ message: "Error fetching doctor appointments." });
+  }
 };
 
+// Doctor reschedules an appointment (goes back to pending)
 exports.rescheduleAppointment = async (req, res) => {
-    try {
-        const { appointmentId, newScheduledDateTime } = req.body;
+  try {
+    const { appointmentId, newScheduledDateTime } = req.body;
+    const appointment = await Appointment.findById(appointmentId);
 
-        const appointment = await Appointment.findById(appointmentId);
+    if (!appointment) return res.status(404).json({ message: "Appointment not found." });
 
-        if (!appointment) {
-            return res.status(404).json({ message: "Appointment not found." });
-        }
+    const dateOnly = new Date(newScheduledDateTime).toISOString().split("T")[0];
+    const timeOnly = new Date(newScheduledDateTime).toTimeString().slice(0, 5);
 
-        // Check for conflicts on the new date
-        const conflictAppointment = await Appointment.findOne({
-            doctorId: appointment.doctorId,
-            scheduledDateTime: newScheduledDateTime,
-            status: { $ne: "canceled" },
-        });
+    const availability = await Availability.findOne({ doctor: appointment.doctor, date: dateOnly });
 
-        if (conflictAppointment) {
-            return res.status(400).json({ message: "Conflict: Doctor is already scheduled." });
-        }
-
-        // Reschedule the appointment
-        appointment.scheduledDateTime = newScheduledDateTime;
-        appointment.status = "pending"; // It might go back to pending until admin confirms
-        await appointment.save();
-
-        res.status(200).json({ message: "Appointment rescheduled.", appointment });
-    } catch (error) {
-        console.error("Error rescheduling appointment: ", error);
-        res.status(500).json({ message: "Error rescheduling appointment." });
+    if (!availability || !availability.timeSlots.includes(timeOnly)) {
+      return res.status(400).json({ message: "Doctor not available at that time." });
     }
+
+    const conflict = await Appointment.findOne({
+      doctor: appointment.doctor,
+      scheduledDateTime: newScheduledDateTime,
+      status: { $ne: "canceled" },
+      _id: { $ne: appointmentId },
+    });
+
+    if (conflict) {
+      return res.status(400).json({ message: "Time slot already booked." });
+    }
+
+    appointment.scheduledDateTime = newScheduledDateTime;
+    appointment.timeSlot = timeOnly;
+    appointment.status = req.user.role === "admin" ? "confirmed" : "pending";
+    await appointment.save();
+
+    // remove old slot, add new if needed
+    availability.timeSlots = availability.timeSlots.filter(slot => slot !== timeOnly);
+    await availability.save();
+
+    res.status(200).json({ message: "Appointment rescheduled.", appointment });
+  } catch (error) {
+    console.error("Reschedule error:", error);
+    res.status(500).json({ message: "Error rescheduling appointment." });
+  }
 };
+
+

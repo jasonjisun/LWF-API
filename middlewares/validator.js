@@ -6,7 +6,7 @@ exports.signupSchema = Joi.object({
     .max(60)
     .required()
     .email({
-      tlds: { allow: ["com", "net"] },
+      tlds: { allow: ["com", "net","ph"] },
     }),
   password: Joi.string()
     .required()
@@ -26,7 +26,7 @@ exports.signinSchema = Joi.object({
     .max(60)
     .required()
     .email({
-      tlds: { allow: ["com", "net"] },
+      tlds: { allow: ["com", "net","ph"] },
     }),
   password: Joi.string()
     .required()
