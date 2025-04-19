@@ -16,4 +16,10 @@ router.get('/appointments', verifyJWT, doctorController.getAppointments);
 // Reschedule an appointment
 router.post('/reschedule-appointment', verifyJWT, doctorController.rescheduleAppointment);
 
+// Get doctor profile
+router.get("/profile", doctorController.getDoctorProfile);
+
+// Update doctor profile
+router.put("/profile", doctorController.updateDoctorProfile);
+
 module.exports = router;

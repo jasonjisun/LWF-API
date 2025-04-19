@@ -16,7 +16,7 @@ router.post("/availability", verifyJWT(["doctor", "admin"]), setAvailability);
 // 👤 Patient books appointment
 router.post("/book", verifyJWT(["patient"]), bookAppointment);
 
-// 👑 Admin confirms/rejects appointment
+// 👑 Admin confirms/rejects appointment  
 router.patch(
   "/:appointmentId/status",
   verifyJWT(["admin"]),

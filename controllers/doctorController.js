@@ -1,5 +1,6 @@
 const Appointment = require('../models/appointmentModel');
 const Availability = require('../models/availabilityModel');
+const DoctorProfile = require("../models/doctorProfileModel");
 
 // Dashboard data for doctor
 exports.getDoctorDashboardData = async (req, res) => {
@@ -73,6 +74,65 @@ exports.rescheduleAppointment = async (req, res) => {
   } catch (error) {
     console.error("Reschedule error:", error);
     res.status(500).json({ message: "Error rescheduling appointment." });
+  }
+};
+
+exports.getDoctorProfile = async (req, res) => {
+  try {
+    const doctorId = req.user.userId;
+
+    const profile = await DoctorProfile.findOne({ doctor: doctorId });
+
+    if (!profile) {
+      return res.status(404).json({ success: false, message: "Profile not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      profile: {
+        fullName: profile.fullName,
+        email: req.user.email,
+        specialization: profile.specialization,
+        phone: profile.phone,
+        bio: profile.bio,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching profile:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// Update or Create Doctor Profile
+exports.updateDoctorProfile = async (req, res) => {
+  try {
+    const doctorId = req.user.userId;
+    const { fullName, specialization, phone, bio } = req.body;
+
+    let profile = await DoctorProfile.findOne({ doctor: doctorId });
+
+    if (profile) {
+      // Update existing profile
+      profile.fullName = fullName;
+      profile.specialization = specialization;
+      profile.phone = phone;
+      profile.bio = bio;
+      await profile.save();
+    } else {
+      // Create new profile
+      profile = await DoctorProfile.create({
+        doctor: doctorId,
+        fullName,
+        specialization,
+        phone,
+        bio,
+      });
+    }
+
+    res.status(200).json({ success: true, message: "Profile saved", profile });
+  } catch (error) {
+    console.error("Error updating profile:", error);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 

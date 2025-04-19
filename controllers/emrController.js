@@ -1,32 +1,36 @@
 const EMR = require("../models/emrModel");
 
-// 🧑‍⚕️ Doctor/Admin: Get EMR by userId (param)
+// 🧑‍⚕️ Doctor/Admin: Get EMR by userId
 exports.getEMRByUserId = async (req, res) => {
   try {
-    const { id } = req.params;
-    const emr = await EMR.findOne({ userId: id });
+    const { userId } = req.params;
+    const emr = await EMR.findOne({ userId });
 
     if (!emr) {
       return res.status(404).json({ success: false, message: "EMR not found" });
     }
 
-    res.status(200).json(emr);
+    res.status(200).json({ success: true, emr });
   } catch (err) {
+    console.error("Get EMR by userId error", err);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
 
-// 🧑‍⚕️ Doctor/Admin: Create or update any EMR
-exports.upsertEMR = async (req, res) => {
+// 🧑‍⚕️ Doctor/Admin: Create or update EMR for specific user
+exports.upsertEMRByUserId = async (req, res) => {
   try {
-    const { userId } = req.body;
-    const emr = await EMR.findOneAndUpdate({ userId }, req.body, {
+    const { userId } = req.params;
+    const updateData = { ...req.body, userId };
+
+    const emr = await EMR.findOneAndUpdate({ userId }, updateData, {
       new: true,
       upsert: true,
     });
 
     res.status(200).json({ success: true, emr });
   } catch (err) {
+    console.error("Upsert EMR error", err);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
@@ -35,49 +39,65 @@ exports.upsertEMR = async (req, res) => {
 exports.getOwnEMR = async (req, res) => {
   try {
     const userId = req.user.userId;
+    console.log("GET /emr/own => userId from token:", userId); // 👈 Add this
+
     const emr = await EMR.findOne({ userId });
 
     if (!emr) {
+      console.log("EMR not found for userId:", userId); // 👈 And this
       return res.status(404).json({ success: false, message: "EMR not found" });
     }
 
-    res.status(200).json(emr);
+    res.status(200).json({ success: true, emr });
   } catch (err) {
+    console.error("Get own EMR error", err);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
 
-// 👤 Patient: Update their own EMR
+
+// 👤 Patient: Create or update their own EMR (limited fields)
 exports.updateOwnEMR = async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.userId;  // Getting userId from the token
 
-    // Optional: filter allowed fields for patient update
     const allowedFields = [
+      "name",
+      "dob",
+      "age",
+      "gender",
+      "bloodType",
       "contact",
+      "email",
       "address",
       "allergies",
       "conditions",
       "medications",
     ];
 
-    const updateData = {};
+    const updateData = { userId };
+
+    // Populate only allowed fields
     allowedFields.forEach((field) => {
-      if (req.body[field] !== undefined) updateData[field] = req.body[field];
+      if (req.body[field] !== undefined) {
+        updateData[field] = req.body[field];
+      }
     });
 
-    const updatedEMR = await EMR.findOneAndUpdate(
-      { userId },
-      { $set: updateData },
-      { new: true }
-    );
+    // Upsert the EMR
+    const emr = await EMR.findOneAndUpdate({ userId }, updateData, {
+      new: true,
+      upsert: true,
+    });
 
-    if (!updatedEMR) {
-      return res.status(404).json({ success: false, message: "EMR not found" });
+    if (!emr) {
+      return res.status(404).json({ success: false, message: "EMR not found or could not update" });
     }
 
-    res.status(200).json({ success: true, emr: updatedEMR });
+    res.status(200).json({ success: true, emr });
   } catch (err) {
+    console.error("Create/update own EMR error", err);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
+

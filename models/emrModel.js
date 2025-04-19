@@ -1,14 +1,19 @@
 const mongoose = require("mongoose");
 
+const medicationSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  frequency: { type: String, required: true },
+});
+
 const emrSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
     required: true,
-    unique: true,
+    unique: true, // 1 EMR per user
   },
   name: String,
-  dob: String,
+  dob: Date,
   age: Number,
   gender: String,
   bloodType: String,
@@ -17,17 +22,12 @@ const emrSchema = new mongoose.Schema({
   address: String,
   allergies: [String],
   conditions: [String],
-  medications: [
-    {
-      name: String,
-      frequency: String,
-    },
-  ],
+  medications: [medicationSchema],
   visitHistory: [
     {
-      date: String,
+      date: Date,
       reason: String,
-      doctor: String,
+      notes: String,
     },
   ],
 });
