@@ -1,10 +1,10 @@
 const express = require("express");
 const verifyJWT = require("../middlewares/verifyJWT");
 const {
-  getEMRByUserId,
-  upsertEMRByUserId,
   getOwnEMR,
   updateOwnEMR,
+  getEMRByUserId,
+  updateEMRByUserId,
 } = require("../controllers/emrController");
 
 const router = express.Router();
@@ -18,7 +18,7 @@ router.put("/own", verifyJWT(["patient"]), updateOwnEMR);
 // 🧑‍⚕️ Doctor/Admin: Get EMR by userId
 router.get("/:userId", verifyJWT(["doctor", "admin"]), getEMRByUserId);
 
-// 🧑‍⚕️ Doctor/Admin: Create or update EMR for a specific user
-router.post("/:userId", verifyJWT(["doctor", "admin"]), upsertEMRByUserId);
+// 🧑‍⚕️ Doctor/Admin: Update EMR for an existing user only (no upsert)
+router.patch("/:userId", verifyJWT(["doctor", "admin"]), updateEMRByUserId);
 
 module.exports = router;

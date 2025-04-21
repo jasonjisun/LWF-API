@@ -10,7 +10,7 @@ const emrSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
     required: true,
-    unique: true, // 1 EMR per user
+    unique: true,
   },
   name: String,
   dob: Date,
