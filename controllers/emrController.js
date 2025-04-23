@@ -63,8 +63,6 @@ exports.updateEMRByUserId = async (req, res) => {
   }
 };
 
-
-
 // 👤 Patient: Get their own EMR
 exports.getOwnEMR = async (req, res) => {
   try {
@@ -85,49 +83,40 @@ exports.getOwnEMR = async (req, res) => {
   }
 };
 
-
-// 👤 Patient: Create or update their own EMR (limited fields)
-exports.updateOwnEMR = async (req, res) => {
+exports.createEMRForUser = async (req, res) => {
   try {
-    const userId = req.user._id;  // Getting userId from the token
+    const { userId } = req.params;
 
+    // Check if userId is valid
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ success: false, message: "Invalid userId" });
+    }
+
+    // Check if EMR already exists
+    const existingEMR = await EMR.findOne({ userId });
+    if (existingEMR) {
+      return res.status(400).json({ success: false, message: "EMR already exists for this user" });
+    }
+
+    // Allowed fields for EMR creation
     const allowedFields = [
-      "name",
-      "dob",
-      "age",
-      "gender",
-      "bloodType",
-      "contact",
-      "email",
-      "address",
-      "allergies",
-      "conditions",
-      "medications",
+      "name", "dob", "age", "gender", "bloodType", "contact", "email",
+      "address", "allergies", "conditions", "medications", "visitHistory"
     ];
 
-    const updateData = { userId };
-
-    // Populate only allowed fields
+    const emrData = { userId };
     allowedFields.forEach((field) => {
       if (req.body[field] !== undefined) {
-        updateData[field] = req.body[field];
+        emrData[field] = req.body[field];
       }
     });
 
-    // Upsert the EMR
-    const emr = await EMR.findOneAndUpdate({ userId }, updateData, {
-      new: true,
-      upsert: true,
-    });
+    const newEMR = new EMR(emrData);
+    await newEMR.save();
 
-    if (!emr) {
-      return res.status(404).json({ success: false, message: "EMR not found or could not update" });
-    }
-
-    res.status(200).json({ success: true, emr });
+    res.status(201).json({ success: true, emr: newEMR });
   } catch (err) {
-    console.error("Create/update own EMR error", err);
+    console.error("Create EMR error", err);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
-
