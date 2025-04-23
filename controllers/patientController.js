@@ -29,7 +29,13 @@ exports.getAvailableDoctors = async (req, res) => {
 // Book an appointment
 exports.bookAppointment = async (req, res) => {
   try {
-    const { doctor, scheduledDateTime, reason, patientId, contactInfo } = req.body;
+    const { doctor, scheduledDateTime, reason, contactInfo } = req.body;
+    const patient = req.user;
+
+    // Restrict unverified patients
+    if (!patient.verified) {
+      return res.status(403).json({ message: "Account not verified. Please verify your account before booking an appointment." });
+    }
 
     const dateOnly = new Date(scheduledDateTime).toISOString().split("T")[0];
     const timeOnly = new Date(scheduledDateTime).toTimeString().slice(0, 5);
@@ -51,7 +57,7 @@ exports.bookAppointment = async (req, res) => {
     }
 
     const newAppointment = new Appointment({
-      patient: patientId,
+      patient: patient._id,
       doctor: doctor,
       scheduledDateTime,
       reason,
@@ -82,5 +88,3 @@ exports.bookAppointment = async (req, res) => {
     res.status(500).json({ message: "Error booking appointment." });
   }
 };
-
-
