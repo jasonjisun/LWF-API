@@ -12,10 +12,14 @@ const verifyJWT = (allowedRoles = []) => {
       let token = getAccessToken(req);
 
       if (!token) {
-        return res.status(401).json({ success: false, message: "No token provided." });
+        return res.status(401).json({
+          success: false,
+          message: "No token provided.",
+        });
       }
 
       let decoded;
+
       try {
         decoded = verifyToken(token, process.env.TOKEN_SECRET);
       } catch (err) {
@@ -23,7 +27,10 @@ const verifyJWT = (allowedRoles = []) => {
           const refreshToken = req.cookies.RefreshToken;
 
           if (!refreshToken) {
-            return res.status(401).json({ success: false, message: "Session expired. Please log in again." });
+            return res.status(401).json({
+              success: false,
+              message: "Session expired. Please log in again.",
+            });
           }
 
           try {
@@ -37,21 +44,53 @@ const verifyJWT = (allowedRoles = []) => {
             });
 
             decoded = verifyToken(token, process.env.TOKEN_SECRET);
+
+            const user = await User.findById(decoded.userId);
+            if (!user) {
+              return res.status(404).json({
+                success: false,
+                message: "User not found.",
+              });
+            }
+
+            if (allowedRoles.length && !allowedRoles.includes(user.role)) {
+              return res.status(403).json({
+                success: false,
+                message: "Access denied. Unauthorized role.",
+              });
+            }
+
+            req.user = user;
+            req.token = token;
+            return next(); // ✅ Important: end the refresh block here
           } catch {
-            return res.status(403).json({ success: false, message: "Invalid refresh token." });
+            return res.status(403).json({
+              success: false,
+              message: "Invalid refresh token.",
+            });
           }
         } else {
-          return res.status(403).json({ success: false, message: "Invalid token." });
+          return res.status(403).json({
+            success: false,
+            message: "Invalid token.",
+          });
         }
       }
 
+      // Token is valid (not expired)
       const user = await User.findById(decoded.userId);
       if (!user) {
-        return res.status(404).json({ success: false, message: "User not found." });
+        return res.status(404).json({
+          success: false,
+          message: "User not found.",
+        });
       }
 
       if (allowedRoles.length && !allowedRoles.includes(user.role)) {
-        return res.status(403).json({ success: false, message: "Access denied. Unauthorized role." });
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. Unauthorized role.",
+        });
       }
 
       req.user = user;
@@ -59,7 +98,10 @@ const verifyJWT = (allowedRoles = []) => {
       next();
     } catch (error) {
       console.error("JWT Middleware Error:", error);
-      res.status(500).json({ success: false, message: "Internal server error." });
+      res.status(500).json({
+        success: false,
+        message: "Internal server error.",
+      });
     }
   };
 };

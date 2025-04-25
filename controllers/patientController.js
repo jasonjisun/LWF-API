@@ -26,6 +26,49 @@ exports.getAvailableDoctors = async (req, res) => {
   }
 };
 
+exports.getAvailableSchedules = async (req, res) => {
+  try {
+    const doctorId = req.params.doctorId;
+
+    // Fetch all availability documents for this doctor
+    const availabilities = await Availability.find({ doctor: doctorId });
+
+    // Fetch all booked appointments for this doctor (future dates)
+    const now = new Date();
+    const bookedAppointments = await Appointment.find({
+      doctor: doctorId,
+      scheduledDateTime: { $gte: now },
+    });
+
+    // Flatten availability to datetime slots
+    let availableDateTimes = [];
+
+    availabilities.forEach((availability) => {
+      const date = new Date(availability.date); // ✅ Ensure it's a Date object
+      const dateStr = date.toISOString().slice(0, 10); // "YYYY-MM-DD"
+
+      availability.timeSlots.forEach((time) => {
+        const dateTimeStr = new Date(`${dateStr}T${time}:00`).toISOString();
+        availableDateTimes.push(dateTimeStr);
+      });
+    });
+
+    // Remove the slots that are already booked
+    const bookedSlots = bookedAppointments.map((a) =>
+      a.scheduledDateTime.toISOString()
+    );
+
+    const filteredAvailableSlots = availableDateTimes.filter(
+      (slot) => !bookedSlots.includes(slot)
+    );
+
+    res.json(filteredAvailableSlots);
+  } catch (error) {
+    console.error("Error fetching available schedules:", error);
+    res.status(500).json({ message: "Failed to fetch available schedules." });
+  }
+};
+
 // Book an appointment
 exports.bookAppointment = async (req, res) => {
   try {

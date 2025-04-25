@@ -1,7 +1,7 @@
 const PatientProfile = require("../models/patientProfileModel");
 const User = require("../models/usersModel");
 
-exports.createPatientProfile = async (req, res, next) => {
+exports.createPatientProfile = async (req, res) => {
   const { name, dob, gender, age, contact, address } = req.body;
   const userId = req.user._id;
 
@@ -26,9 +26,7 @@ exports.createPatientProfile = async (req, res, next) => {
       address,
     });
 
-    // inject email for sendVerificationCode
-    req.body.email = user.email;
-    next(); // go to sendVerificationCode
+    res.status(201).json({ success: true, message: "Profile created successfully.", profile });
   } catch (error) {
     console.log(error);
     res.status(500).json({ success: false, message: "Something went wrong." });
@@ -62,3 +60,39 @@ exports.updatePatientProfile = async (req, res) => {
       res.status(500).json({ success: false, message: "Something went wrong." });
     }
   };
+
+  // Get own patient profile (for patient)
+exports.getOwnPatientProfile = async (req, res) => {
+  const userId = req.user._id;
+
+  try {
+    const profile = await PatientProfile.findOne({ user: userId });
+
+    if (!profile) {
+      return res.status(404).json({ success: false, message: "Profile not found." });
+    }
+
+    return res.status(200).json({ success: true, profile });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ success: false, message: "Something went wrong." });
+  }
+};
+
+// Get any patient profile by ID (for admin or doctor)
+exports.getPatientProfile = async (req, res) => {
+  const { patientId } = req.params;
+
+  try {
+    const profile = await PatientProfile.findOne({ user: patientId }).populate("user", "-password");
+
+    if (!profile) {
+      return res.status(404).json({ success: false, message: "Profile not found." });
+    }
+
+    return res.status(200).json({ success: true, profile });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ success: false, message: "Something went wrong." });
+  }
+};

@@ -19,10 +19,6 @@ const doctorProfileSchema = new mongoose.Schema({
     type: String,
     required: false,
   },
-  bio: {
-    type: String,
-    required: false,
-  },
 }, { timestamps: true });
 
 module.exports = mongoose.model("DoctorProfile", doctorProfileSchema);
