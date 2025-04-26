@@ -16,13 +16,16 @@ router.get('/appointments', verifyJWT, doctorController.getAppointments);
 // Reschedule an appointment
 router.post('/reschedule-appointment', verifyJWT, doctorController.rescheduleAppointment);
 
-// Get doctor profile
-router.get("/profile", verifyJWT, doctorController.getDoctorProfile);
+// Create a doctor profile (only doctors)
+router.post("/profile", verifyJWT(["doctor"]), doctorController.createDoctorProfile);
 
-// Create Doctor Profile
-router.post('/create-doctor-profile', verifyJWT, doctorController.createDoctorProfile);
+// Get a doctor's profile (accessible to doctor, patient, admin)
+router.get("/profile/:doctorId", verifyJWT(["doctor", "patient", "admin"]), doctorController.getDoctorProfile);
 
-// Update doctor profile
-router.put("/profile", verifyJWT, doctorController.updateDoctorProfile);
+// Update a doctor's profile (accessible to doctor themselves or admin)
+router.put("/profile/:doctorId", verifyJWT(["doctor", "admin"]), doctorController.updateDoctorProfile);
+
+// Delete a doctor's profile (admin only)
+router.delete("/profile/:doctorId", verifyJWT(["admin"]), doctorController.deleteDoctorProfile);
 
 module.exports = router;

@@ -77,7 +77,6 @@ const verifyJWT = (allowedRoles = []) => {
         }
       }
 
-      // Token is valid (not expired)
       const user = await User.findById(decoded.userId);
       if (!user) {
         return res.status(404).json({

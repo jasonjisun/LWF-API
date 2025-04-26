@@ -10,7 +10,7 @@ exports.signupSchema = Joi.object({
     }),
   password: Joi.string()
     .required()
-    .pattern(new RegExp("^.{8,16}$")) // Allows 8-16 characters, no other restrictions
+    .pattern(new RegExp("^.{8,16}$"))
     .messages({
       "string.pattern.base": "Password must be between 8-16 characters.",
     }),

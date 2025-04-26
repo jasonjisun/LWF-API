@@ -82,8 +82,8 @@ exports.signin = async (req, res) => {
     }
 
     // Set token expiration based on "Remember Me"
-    const accessTokenExpiry = "8h"; // Access token always expires in 8 hours
-    const refreshTokenExpiry = rememberMe ? "30d" : "7d"; // 🔹 Longer refresh token for "Remember Me"
+    const accessTokenExpiry = "8h"; 
+    const refreshTokenExpiry = rememberMe ? "30d" : "7d";
 
     // Generate Access Token
     const token = jwt.sign(
@@ -110,19 +110,29 @@ exports.signin = async (req, res) => {
         expires: new Date(Date.now() + 8 * 3600000), // 8 hours
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
+        sameSite: "Strict",
       })
       .cookie("RefreshToken", refreshToken, {
-        expires: new Date(Date.now() + (rememberMe ? 30 : 7) * 24 * 3600000), // 30 days or 7 days
+        expires: new Date(Date.now() + (rememberMe ? 30 : 7) * 24 * 3600000),
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
+        sameSite: "Strict",
+      })
+      .cookie("UserID", existingUser._id.toString(), {
+        expires: new Date(Date.now() + (rememberMe ? 30 : 7) * 24 * 3600000),
+        httpOnly: false,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "Strict",
       })
       .json({
         success: true,
         token,
         refreshToken,
         role: existingUser.role,
+        userId: existingUser._id,
         message: "Logged in successfully!",
       });
+
   } catch (error) {
     console.log("Signin Error:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
@@ -140,8 +150,6 @@ exports.refreshToken = async (req, res) => {
 
   try {
     const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
-
-    // Generate a new access token
     const newToken = jwt.sign(
       { userId: decoded.userId },
       process.env.TOKEN_SECRET,
@@ -164,10 +172,10 @@ exports.signout = async (req, res) => {
   res
     .clearCookie("Authorization", { httpOnly: true, secure: true, sameSite: "None" })
     .clearCookie("RefreshToken", { httpOnly: true, secure: true, sameSite: "None" })
+    .clearCookie("UserID", { httpOnly: false, secure: true, sameSite: "None" })
     .status(200)
     .json({ success: true, message: "Logged out successfully" });
 };
-
 
 exports.sendVerificationCode = async (req, res) => {
   const { email } = req.body;

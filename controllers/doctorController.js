@@ -77,81 +77,97 @@ exports.rescheduleAppointment = async (req, res) => {
   }
 };
 
+// Create a new doctor profile
 exports.createDoctorProfile = async (req, res) => {
-  console.log("CREATE DOCTOR PROFILE");
   try {
-    const doctorId = req.user.userId;
-    console.log("Doctor ID:", doctorId);
     const { fullName, specialization, phone } = req.body;
 
-    const existingProfile = await DoctorProfile.findOne({ doctor: doctorId });
-    if (existingProfile) {
-      return res.status(400).json({ success: false, message: "Profile already exists" });
+    if (req.user.role !== "doctor") {
+      return res.status(403).json({ message: "Only doctors can create profiles." });
     }
 
-    const newProfile = await DoctorProfile.create({
-      doctor: doctorId,
+    const existingProfile = await DoctorProfile.findOne({ doctor: req.user._id });
+    if (existingProfile) {
+      return res.status(400).json({ message: "Doctor profile already exists." });
+    }
+
+    const newProfile = new DoctorProfile({
+      doctor: req.user._id,
       fullName,
       specialization,
       phone,
     });
 
-    res.status(201).json({ success: true, message: "Profile created", profile: newProfile });
+    const savedProfile = await newProfile.save();
+
+    res.status(201).json(savedProfile);
   } catch (error) {
-    console.error("Error creating profile:", error);
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("Error creating doctor profile:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
+// Get a doctor's profile by ID
 exports.getDoctorProfile = async (req, res) => {
   try {
-    const doctorId = req.user.userId;
+    const { doctorId } = req.params;
+
+    const profile = await DoctorProfile.findOne({ doctor: doctorId }).populate("doctor", "-password");
+
+    if (!profile) {
+      return res.status(404).json({ message: "Doctor profile not found." });
+    }
+
+    res.status(200).json(profile);
+  } catch (error) {
+    console.error("Error fetching doctor profile:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Update a doctor's profile
+exports.updateDoctorProfile = async (req, res) => {
+  try {
+    const { doctorId } = req.params;
+    const { fullName, specialization, phone } = req.body;
 
     const profile = await DoctorProfile.findOne({ doctor: doctorId });
 
     if (!profile) {
-      return res.status(404).json({ success: false, message: "Profile not found" });
+      return res.status(404).json({ message: "Doctor profile not found." });
     }
 
-    res.status(200).json({
-      success: true,
-      profile: {
-        fullName: profile.fullName,
-        specialization: profile.specialization,
-        phone: profile.phone,
-      },
-    });
+    if (req.user.role !== "admin" && String(req.user._id) !== String(profile.doctor)) {
+      return res.status(403).json({ message: "Access denied. You cannot edit this profile." });
+    }
+
+    if (fullName) profile.fullName = fullName;
+    if (specialization) profile.specialization = specialization;
+    if (phone) profile.phone = phone;
+
+    const updatedProfile = await profile.save();
+
+    res.status(200).json(updatedProfile);
   } catch (error) {
-    console.error("Error fetching profile:", error);
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("Error updating doctor profile:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
-// Update or Create Doctor Profile
-exports.updateDoctorProfile = async (req, res) => {
+// Delete a doctor's profile (admin only)
+exports.deleteDoctorProfile = async (req, res) => {
   try {
-    const doctorId = req.user.userId;
-    const { fullName, specialization, phone } = req.body;
+    const { doctorId } = req.params;
 
-    let profile = await DoctorProfile.findOne({ doctor: doctorId });
+    const profile = await DoctorProfile.findOneAndDelete({ doctor: doctorId });
 
-    if (profile) {
-      profile.fullName = fullName;
-      profile.specialization = specialization;
-      profile.phone = phone;
-      await profile.save();
-    } else {
-      profile = await DoctorProfile.create({
-        doctor: doctorId,
-        fullName,
-        specialization,
-        phone,
-      });
+    if (!profile) {
+      return res.status(404).json({ message: "Doctor profile not found." });
     }
 
-    res.status(200).json({ success: true, message: "Profile saved", profile });
+    res.status(200).json({ message: "Doctor profile deleted successfully." });
   } catch (error) {
-    console.error("Error updating profile:", error);
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("Error deleting doctor profile:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
