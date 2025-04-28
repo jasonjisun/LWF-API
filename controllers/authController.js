@@ -178,18 +178,15 @@ exports.signout = async (req, res) => {
 };
 
 exports.sendVerificationCode = async (req, res) => {
-  const { email } = req.body;
   try {
+    const email = req.user.email; // Get email from authenticated user
     const existingUser = await User.findOne({ email });
+
     if (!existingUser) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User does not exists!" });
+      return res.status(404).json({ success: false, message: "User does not exist!" });
     }
     if (existingUser.verified) {
-      return res
-        .status(400)
-        .json({ success: false, message: "You are already verified!" });
+      return res.status(400).json({ success: false, message: "You are already verified!" });
     }
 
     const codeValue = Math.floor(Math.random() * 1000000).toString();
@@ -197,7 +194,7 @@ exports.sendVerificationCode = async (req, res) => {
       from: process.env.NODE_CODE_SENDING_EMAIL_ADDRESS,
       to: existingUser.email,
       subject: "verification code",
-      html: "<h1>" + codeValue + "</h1>",
+      html: `<h1>${codeValue}</h1>`,
     });
 
     if (info.accepted[0] === existingUser.email) {
@@ -210,20 +207,21 @@ exports.sendVerificationCode = async (req, res) => {
       await existingUser.save();
       return res.status(200).json({ success: true, message: "Code sent!" });
     }
-    res.status(400).json({ success: false, message: "Code sent failed!" });
+    res.status(400).json({ success: false, message: "Code send failed!" });
   } catch (error) {
     console.log(error);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
 exports.verifyVerificationCode = async (req, res) => {
-  const { email, providedCode } = req.body;
   try {
-    const { error, value } = acceptCodeSchema.validate({ email, providedCode });
+    const email = req.user.email; // Get email from authenticated user
+    const { providedCode } = req.body;
+
+    const { error, value } = acceptCodeSchema.validate({ email: req.user.email, providedCode });
     if (error) {
-      return res
-        .status(401)
-        .json({ success: false, message: error.details[0].message });
+      return res.status(401).json({ success: false, message: error.details[0].message });
     }
 
     const codeValue = providedCode.toString();
@@ -232,29 +230,18 @@ exports.verifyVerificationCode = async (req, res) => {
     );
 
     if (!existingUser) {
-      return res
-        .status(401)
-        .json({ success: false, message: "User does not exists!" });
+      return res.status(401).json({ success: false, message: "User does not exist!" });
     }
     if (existingUser.verified) {
-      return res
-        .status(400)
-        .json({ success: false, message: "you are already verified!" });
+      return res.status(400).json({ success: false, message: "You are already verified!" });
     }
 
-    if (
-      !existingUser.verificationCode ||
-      !existingUser.verificationCodeValidation
-    ) {
-      return res
-        .status(400)
-        .json({ success: false, message: "something is wrong with the code!" });
+    if (!existingUser.verificationCode || !existingUser.verificationCodeValidation) {
+      return res.status(400).json({ success: false, message: "Something is wrong with the code!" });
     }
 
     if (Date.now() - existingUser.verificationCodeValidation > 5 * 60 * 1000) {
-      return res
-        .status(400)
-        .json({ success: false, message: "code has been expired!" });
+      return res.status(400).json({ success: false, message: "Code has expired!" });
     }
 
     const hashedCodeValue = hmacProcess(
@@ -267,15 +254,12 @@ exports.verifyVerificationCode = async (req, res) => {
       existingUser.verificationCode = undefined;
       existingUser.verificationCodeValidation = undefined;
       await existingUser.save();
-      return res
-        .status(200)
-        .json({ success: true, message: "your account has been verified!" });
+      return res.status(200).json({ success: true, message: "Your account has been verified!" });
     }
-    return res
-      .status(400)
-      .json({ success: false, message: "unexpected occured!!" });
+    return res.status(400).json({ success: false, message: "Invalid code!" });
   } catch (error) {
     console.log(error);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 

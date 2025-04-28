@@ -4,10 +4,18 @@ const {
   updatePatientProfile,
   getOwnPatientProfile,
   getPatientProfile,
+  getPatientVerificationStatus,
 } = require("../controllers/patientProfileController");
 const verifyJWT = require("../middlewares/verifyJWT");
 
 const router = express.Router();
+
+// Get verification status of a patient (for all roles)
+router.get(
+  "/verification-status/:patientId",
+  verifyJWT(["admin", "doctor", "patient"]),
+  getPatientVerificationStatus
+);
 
 // Get own profile (patient)
 router.get("/my-profile", verifyJWT(["patient"]), getOwnPatientProfile);

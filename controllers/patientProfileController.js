@@ -96,3 +96,28 @@ exports.getPatientProfile = async (req, res) => {
     res.status(500).json({ success: false, message: "Something went wrong." });
   }
 };
+
+exports.getPatientVerificationStatus = async (req, res) => {
+  const { patientId } = req.params;
+
+  try {
+    // Step 1: Find the PatientProfile by its _id
+    const patientProfile = await PatientProfile.findById(patientId);
+
+    if (!patientProfile) {
+      return res.status(404).json({ success: false, message: "Patient profile not found." });
+    }
+
+    // Step 2: Use the `user` field from PatientProfile to find the User
+    const user = await User.findById(patientProfile.user).select("verified");
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found." });
+    }
+
+    return res.status(200).json({ success: true, isVerified: user.verified });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: "Something went wrong." });
+  }
+};
