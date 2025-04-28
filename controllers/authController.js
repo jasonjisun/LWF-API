@@ -264,48 +264,42 @@ exports.verifyVerificationCode = async (req, res) => {
 };
 
 exports.changePassword = async (req, res) => {
-  const { userId, verified } = req.user;
+  // Destructure the userId and verified correctly from req.user
+  const userId = req.user._id || req.user.id;  // Use _id or id (depending on your schema)
+  const verified = req.user.verified;
+
   const { oldPassword, newPassword, confirmNewPassword } = req.body;
 
   try {
+    // Validate passwords using your schema
     const { error } = changePasswordSchema.validate({
       oldPassword,
       newPassword,
       confirmNewPassword,
     });
+
     if (error) {
-      return res
-        .status(401)
-        .json({ success: false, message: error.details[0].message });
+      return res.status(401).json({ success: false, message: error.details[0].message });
     }
 
+    // Check if user is verified
     if (!verified) {
-      return res
-        .status(401)
-        .json({ success: false, message: "You are not a verified user!" });
+      return res.status(401).json({ success: false, message: "You are not a verified user!" });
     }
 
-    const existingUser = await User.findOne({ _id: userId }).select(
-      "+password"
-    );
+    // Find the user based on userId
+    const existingUser = await User.findOne({ _id: userId }).select("+password");
     if (!existingUser) {
-      return res
-        .status(401)
-        .json({ success: false, message: "User does not exist!" });
+      return res.status(401).json({ success: false, message: "User does not exist!" });
     }
 
-    // Validate old password
-    const isOldPasswordValid = await doHashValidation(
-      oldPassword,
-      existingUser.password
-    );
+    // Validate the old password
+    const isOldPasswordValid = await doHashValidation(oldPassword, existingUser.password);
     if (!isOldPasswordValid) {
-      return res
-        .status(401)
-        .json({ success: false, message: "Invalid current password!" });
+      return res.status(401).json({ success: false, message: "Invalid current password!" });
     }
 
-    // Check if new password is different from the old password
+    // Ensure the new password is different from the old password
     if (oldPassword === newPassword) {
       return res.status(400).json({
         success: false,
@@ -313,14 +307,14 @@ exports.changePassword = async (req, res) => {
       });
     }
 
-    // Hash and update new password
+    // Hash the new password
     const hashedPassword = await doHash(newPassword, 12);
     existingUser.password = hashedPassword;
+
+    // Save the updated user document
     await existingUser.save();
 
-    return res
-      .status(200)
-      .json({ success: true, message: "Password updated successfully!" });
+    return res.status(200).json({ success: true, message: "Password updated successfully!" });
   } catch (error) {
     console.error("Error changing password:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
