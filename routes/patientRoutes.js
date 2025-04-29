@@ -6,6 +6,7 @@ const verifyJWT = require('../middlewares/verifyJWT');
 // Patient-specific routes (requires patient role)
 router.get('/dashboard', verifyJWT(['patient']), patientController.getPatientDashboardData);
 router.get('/available-schedules/:doctorId', patientController.getAvailableSchedules);
-router.post("/book-appointment", verifyJWT(['patient']), patientController.bookAppointment);
+router.patch("/book-appointment/:patientId", patientController.bookAppointment);
+
 
 module.exports = router;

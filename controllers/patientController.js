@@ -30,67 +30,75 @@ exports.getAvailableSchedules = async (req, res) => {
   try {
     const doctorId = req.params.doctorId;
 
-    // Fetch all availability documents for this doctor
     const availabilities = await Availability.find({ doctor: doctorId });
 
-    // Fetch all booked appointments for this doctor (future dates)
     const now = new Date();
     const bookedAppointments = await Appointment.find({
       doctor: doctorId,
       scheduledDateTime: { $gte: now },
     });
 
-    // Flatten availability to datetime slots
     let availableDateTimes = [];
 
     availabilities.forEach((availability) => {
-      const date = new Date(availability.date); // ✅ Ensure it's a Date object
-      const dateStr = date.toISOString().slice(0, 10); // "YYYY-MM-DD"
+      const date = new Date(availability.date);
+      if (isNaN(date)) return; // Skip if invalid
+
+      const dateStr = date.toISOString().slice(0, 10);
 
       availability.timeSlots.forEach((time) => {
-        const dateTimeStr = new Date(`${dateStr}T${time}:00`).toISOString();
-        availableDateTimes.push(dateTimeStr);
+        if (!/^\d{2}:\d{2}$/.test(time)) return; // Ensure HH:MM format
+
+        const dateTime = new Date(`${dateStr}T${time}:00`);
+        if (!isNaN(dateTime)) {
+          availableDateTimes.push(dateTime.toISOString());
+        }
       });
     });
 
-    // Remove the slots that are already booked
-    const bookedSlots = bookedAppointments.map((a) =>
-      a.scheduledDateTime.toISOString()
-    );
+    // Remove booked appointments
+    const bookedSet = new Set(bookedAppointments.map((appt) =>
+      new Date(appt.scheduledDateTime).toISOString()
+    ));
 
-    const filteredAvailableSlots = availableDateTimes.filter(
-      (slot) => !bookedSlots.includes(slot)
-    );
+    const filtered = availableDateTimes.filter(dt => !bookedSet.has(dt));
 
-    res.json(filteredAvailableSlots);
+    res.status(200).json({ availableSchedules: filtered });
   } catch (error) {
     console.error("Error fetching available schedules:", error);
-    res.status(500).json({ message: "Failed to fetch available schedules." });
+    res.status(500).json({ message: "Error fetching available schedules." });
   }
 };
 
-// Book an appointment
 exports.bookAppointment = async (req, res) => {
   try {
-    const { doctor, scheduledDateTime, reason, contactInfo } = req.body;
-    const patient = req.user;
+    const { patientId } = req.params;
+    const { doctorId, scheduledDateTime, reason, contactInfo } = req.body;
+
+    // Fetch patient manually by ID
+    const patient = await User.findById(patientId);
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found." });
+    }
 
     // Restrict unverified patients
     if (!patient.verified) {
-      return res.status(403).json({ message: "Account not verified. Please verify your account before booking an appointment." });
+      return res.status(403).json({
+        message: "Account not verified. Please verify your account before booking an appointment.",
+      });
     }
 
     const dateOnly = new Date(scheduledDateTime).toISOString().split("T")[0];
     const timeOnly = new Date(scheduledDateTime).toTimeString().slice(0, 5);
 
-    const availability = await Availability.findOne({ doctor, date: dateOnly });
+    const availability = await Availability.findOne({ doctor: doctorId, date: dateOnly });
 
     if (!availability || !availability.timeSlots.includes(timeOnly)) {
       return res.status(400).json({ message: "Doctor is not available at the selected time." });
     }
 
     const conflict = await Appointment.findOne({
-      doctor: doctor,
+      doctor: doctorId,
       scheduledDateTime,
       status: "confirmed",
     });
@@ -100,8 +108,8 @@ exports.bookAppointment = async (req, res) => {
     }
 
     const newAppointment = new Appointment({
-      patient: patient._id,
-      doctor: doctor,
+      patient: patientId,
+      doctor: doctorId,
       scheduledDateTime,
       reason,
       timeSlot: timeOnly,

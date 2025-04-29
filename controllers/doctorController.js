@@ -23,13 +23,21 @@ exports.getDoctorDashboardData = async (req, res) => {
 };
 
 // Get all appointments for logged-in doctor
-exports.getAppointments = async (req, res) => {
+exports.getPatientAppointmentsForDoctor = async (req, res) => {
   try {
-    const appointments = await Appointment.find({ doctor: req.user._id }).sort({ scheduledDateTime: 1 }); // Use doctor field (not doctorId)
-    res.status(200).json({ appointments });
+    const doctorId = req.user._id; // assuming doctor is authenticated via verifyJWT
+
+    const pendingAppointments = await Appointment.find({
+      doctor: doctorId,
+      status: "pending",
+    })
+      .populate("patient", "fullName email contactNumber") // show patient details
+      .sort({ scheduledDateTime: 1 }); // soonest first
+
+    res.status(200).json({ appointments: pendingAppointments });
   } catch (error) {
-    console.error("Error fetching doctor appointments:", error);
-    res.status(500).json({ message: "Error fetching doctor appointments." });
+    console.error("Error fetching patient appointments:", error);
+    res.status(500).json({ message: "Error retrieving appointments." });
   }
 };
 
