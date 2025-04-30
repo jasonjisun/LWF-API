@@ -171,3 +171,45 @@ exports.bookAppointment = async (req, res) => {
     res.status(500).json({ message: "Error booking appointment." });
   }
 };
+
+exports.getMyAppointmentStatus = async (req, res) => {
+  try {
+    // Fetch all appointments for the patient
+    const appointments = await Appointment.find({ patient: req.user._id })
+      .populate({
+
+        path: 'doctor', // Populate the doctor reference (User model)
+        select: '_id doctorProfile', // Include the doctor's profile information in the doctor data
+      })
+      .populate({
+        path: 'doctor.doctorProfile', // Populate doctorProfile inside the doctor field
+        select: 'fullName', // Select only fullName from the doctor profile
+      });
+
+    if (appointments.length === 0) {
+      return res.status(404).json({ message: 'No appointments found for this patient.' });
+    }
+
+    // Map the appointments and handle population
+    const appointmentStatus = appointments.map(appt => {
+      
+      // If doctor profile exists, extract the name
+      const doctorName = appt.doctor && appt.doctor.doctorProfile ? appt.doctor.doctorProfile.fullName : 'Doctor not found';
+
+      return {
+        appointmentId: appt._id,
+        doctorId: appt.doctor ? appt.doctor._id : null,
+        doctorName: doctorName,
+        scheduledDateTime: appt.scheduledDateTime,
+        status: appt.status,
+        reason: appt.reason,
+        timeSlot: appt.timeSlot,
+      };
+    });
+
+    res.status(200).json({ appointments: appointmentStatus });
+  } catch (error) {
+    console.error("Error fetching appointment status:", error);
+    res.status(500).json({ message: 'Error fetching appointment status.' });
+  }
+};

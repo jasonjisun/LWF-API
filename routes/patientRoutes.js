@@ -16,4 +16,6 @@ router.get('/available-doctors', patientController.getAvailableDoctors);
 // Get all doctors with profiles
 router.get("/all-doctors", patientController.getAllDoctorsWithProfiles);
 
+router.get('/my-appointments/status', verifyJWT(), patientController.getMyAppointmentStatus);
+
 module.exports = router;
