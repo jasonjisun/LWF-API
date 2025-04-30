@@ -69,7 +69,6 @@ exports.getAllAppointmentsForAdmin = async (req, res) => {
     res.status(500).json({ message: "Error retrieving appointments." });
   }
 };
-  
 
 // Confirm the appointment
 exports.confirmAppointment = async (req, res) => {

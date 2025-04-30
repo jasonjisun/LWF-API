@@ -61,6 +61,72 @@ exports.updatePatientProfile = async (req, res) => {
     }
   };
 
+  exports.updateAnyPatientProfile = async (req, res) => {
+    const { userId, name, dob, gender, age, contact, address } = req.body;
+  
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "User ID is required." });
+    }
+  
+    try {
+      const profile = await PatientProfile.findOne({ user: userId });
+  
+      if (!profile) {
+        return res.status(404).json({ success: false, message: "Profile not found." });
+      }
+  
+      // Update only if value is provided
+      profile.name = name ?? profile.name;
+      profile.dob = dob ?? profile.dob;
+      profile.gender = gender ?? profile.gender;
+      profile.age = age ?? profile.age;
+      profile.contact = contact ?? profile.contact;
+      profile.address = address ?? profile.address;
+  
+      await profile.save();
+  
+      return res.status(200).json({ success: true, profile, message: "Profile updated successfully." });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ success: false, message: "Server error." });
+    }
+  };
+
+  // Get all patient profiles (for admin or doctor)
+exports.getAllPatientProfiles = async (req, res) => {
+  try {
+    const profiles = await PatientProfile.find().populate("user", "-password");
+
+    if (!profiles || profiles.length === 0) {
+      return res.status(404).json({ success: false, message: "No profiles found." });
+    }
+
+    return res.status(200).json({ success: true, profiles });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Something went wrong." });
+  }
+};
+
+exports.getPatientsWithEmail = async (req, res) => {
+  try {
+    // Fetch all patient profiles with populated email from User model
+    const patients = await PatientProfile.find()
+      .populate("user", "email") // Populating only the email field from User model
+      .exec();
+
+    if (!patients || patients.length === 0) {
+      return res.status(404).json({ success: false, message: "No patients found" });
+    }
+
+    // Send the patients data along with their email
+    res.status(200).json({ success: true, profiles: patients });
+  } catch (err) {
+    console.error("Error fetching patients with email", err);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
+
   // Get own patient profile (for patient)
 exports.getOwnPatientProfile = async (req, res) => {
   const userId = req.user._id;

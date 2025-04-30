@@ -15,6 +15,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const doctorRoutes = require('./routes/doctorRoutes');
 const patientRoutes = require('./routes/patientRoutes');
 const patientProfileRoutes = require('./routes/patientProfileRoutes');
+const adminProfileRoutes = require('./routes/adminProfileRoutes');
 
 
 const app = express();
@@ -60,6 +61,7 @@ app.use("/api/emr", emrRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/doctor', doctorRoutes);
 app.use('/api/patient', patientRoutes);
+app.use('/api/admin', adminProfileRoutes);
 app.use('/api/patient', patientProfileRoutes);
 
 // 🎯 Base API Route

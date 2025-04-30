@@ -5,6 +5,7 @@ const {
   getEMRByUserId,
   updateEMRByUserId,
   createEMRForUser,
+  getPatientEMR,
 } = require("../controllers/emrController");
 
 const router = express.Router();
@@ -13,7 +14,7 @@ const router = express.Router();
 router.get("/own", verifyJWT(["patient"]), getOwnEMR);
 
 // 🧑‍⚕️ Doctor/Admin: Get EMR by userId
-router.get("/:userId", verifyJWT(["doctor", "admin"]), getEMRByUserId);
+router.get("/:userId", verifyJWT(["doctor", "admin"]), getPatientEMR);
 
 // 🧑‍⚕️ Doctor/Admin: Create EMR for a new user only
 router.post("/:userId", verifyJWT(["doctor","admin"]), createEMRForUser);

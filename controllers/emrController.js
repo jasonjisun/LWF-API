@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const EMR = require("../models/emrModel");
 
 // 🧑‍⚕️ Doctor/Admin: Get EMR by userId
-exports.getEMRByUserId = async (req, res) => {
+exports.getPatientEMR = async (req, res) => {
   try {
     const { userId } = req.params;
     const emr = await EMR.findOne({ userId });
