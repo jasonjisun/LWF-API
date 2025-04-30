@@ -1,5 +1,6 @@
 const Appointment = require('../models/appointmentModel');
 const Availability = require('../models/availabilityModel');
+const DoctorProfile = require("../models/doctorProfileModel");
 const User = require('../models/usersModel'); // Added for getAvailableDoctors
 
 // Get patient dashboard data
@@ -16,12 +17,43 @@ exports.getPatientDashboardData = async (req, res) => {
   }
 };
 
+exports.getAllDoctorsWithProfiles = async (req, res) => {
+  try {
+    const doctors = await DoctorProfile.find()
+      .populate({
+        path: "doctor",
+        match: { role: "doctor" },
+        select: "_id email verified"
+      })
+      .select("fullName specialization doctor");
+
+    // Filter out any where the linked user is null
+    const filtered = doctors.filter(doc => doc.doctor);
+
+    res.status(200).json(filtered);
+  } catch (error) {
+    console.error("Error fetching doctor list:", error);
+    res.status(500).json({ message: "Failed to fetch doctor list" });
+  }
+};
+
 // Get list of doctors
 exports.getAvailableDoctors = async (req, res) => {
   try {
-    const doctors = await User.find({ role: 'doctor' });
-    res.json(doctors);
+    const doctorProfiles = await DoctorProfile.find()
+      .populate({
+        path: 'doctor',
+        match: { role: 'doctor' }, // ensure linked user is a doctor
+        select: '_id email'        // include only needed fields
+      })
+      .select('fullName specialization doctor');
+
+    // Optional: filter out ones where doctor reference was not matched
+    const filteredDoctors = doctorProfiles.filter(profile => profile.doctor !== null);
+
+    res.json(filteredDoctors);
   } catch (error) {
+    console.error("Error fetching doctors:", error);
     res.status(500).json({ message: 'Error fetching doctors' });
   }
 };
