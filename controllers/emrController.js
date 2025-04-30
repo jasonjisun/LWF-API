@@ -1,6 +1,17 @@
 const mongoose = require("mongoose");
 const EMR = require("../models/emrModel");
 
+// 🧑‍⚕️ Doctor/Admin: Get all EMRs
+exports.getAllPatientEMR = async (req, res) => {
+  try {
+    const allEMRs = await EMR.find().sort({ createdAt: -1 });
+    res.status(200).json({ success: true, emrs: allEMRs });
+  } catch (err) {
+    console.error("Get all EMRs error", err);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
+
 // 🧑‍⚕️ Doctor/Admin: Get EMR by userId
 exports.getPatientEMR = async (req, res) => {
   try {

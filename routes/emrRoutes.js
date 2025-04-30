@@ -2,13 +2,16 @@ const express = require("express");
 const verifyJWT = require("../middlewares/verifyJWT");
 const {
   getOwnEMR,
-  getEMRByUserId,
   updateEMRByUserId,
   createEMRForUser,
   getPatientEMR,
+  getAllPatientEMR,
 } = require("../controllers/emrController");
 
 const router = express.Router();
+
+// 🧑‍⚕️ Doctor/Admin: Get all EMRs
+router.get("/get-all", verifyJWT(["admin"]), getAllPatientEMR);
 
 // 👤 Patient: Get their own EMR
 router.get("/own", verifyJWT(["patient"]), getOwnEMR);
