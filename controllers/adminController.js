@@ -29,18 +29,6 @@ exports.getAdminDashboardData = async (req, res) => {
   }
 };
 
-// All Appointments
-exports.getAdminAppointments = async (req, res) => {
-  try {
-    const appointments = await Appointment.find().sort({
-      scheduledDateTime: 1,
-    });
-    res.json(appointments);
-  } catch (error) {
-    res.status(500).json({ message: "Error fetching appointments" });
-  }
-};
-
 exports.getAllAppointmentsForAdmin = async (req, res) => {
   try {
     const { status } = req.query; // optional status filter (pending, confirmed, cancelled)
@@ -103,7 +91,6 @@ exports.confirmAppointment = async (req, res) => {
 exports.cancelAppointment = async (req, res) => {
   try {
     const { appointmentId } = req.params;
-    const { note } = req.body; // The cancellation note
 
     // Find the appointment by ID
     const appointment = await Appointment.findById(appointmentId);
@@ -118,7 +105,6 @@ exports.cancelAppointment = async (req, res) => {
 
     // Update the appointment status to 'cancelled'
     appointment.status = 'cancelled';
-    appointment.cancellationNote = note || 'No cancellation note provided';
     await appointment.save();
 
     res.status(200).json({
