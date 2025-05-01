@@ -174,32 +174,29 @@ exports.bookAppointment = async (req, res) => {
 
 exports.getMyAppointmentStatus = async (req, res) => {
   try {
-    // Fetch all appointments for the patient
-    const appointments = await Appointment.find({ patient: req.user._id })
-      .populate({
-
-        path: 'doctor', // Populate the doctor reference (User model)
-        select: '_id doctorProfile', // Include the doctor's profile information in the doctor data
-      })
-      .populate({
-        path: 'doctor.doctorProfile', // Populate doctorProfile inside the doctor field
-        select: 'fullName', // Select only fullName from the doctor profile
-      });
+    const appointments = await Appointment.find({ patient: req.user._id }).lean();
 
     if (appointments.length === 0) {
       return res.status(404).json({ message: 'No appointments found for this patient.' });
     }
 
-    // Map the appointments and handle population
+    // Step 1: Get doctor IDs from appointments
+    const doctorIds = [...new Set(appointments.map(appt => appt.doctor.toString()))];
+
+    // Step 2: Get doctor profiles where 'doctor' matches those IDs
+    const profiles = await DoctorProfile.find({ doctor: { $in: doctorIds } }).lean();
+
+    // Step 3: Map doctor user IDs to full names
+    const doctorMap = new Map(profiles.map(profile => [profile.doctor.toString(), profile.fullName]));
+
+    // Step 4: Format appointment response
     const appointmentStatus = appointments.map(appt => {
-      
-      // If doctor profile exists, extract the name
-      const doctorName = appt.doctor && appt.doctor.doctorProfile ? appt.doctor.doctorProfile.fullName : 'Doctor not found';
+      const doctorName = doctorMap.get(appt.doctor.toString()) || 'Doctor not found';
 
       return {
         appointmentId: appt._id,
-        doctorId: appt.doctor ? appt.doctor._id : null,
-        doctorName: doctorName,
+        doctorId: appt.doctor,
+        doctorName,
         scheduledDateTime: appt.scheduledDateTime,
         status: appt.status,
         reason: appt.reason,

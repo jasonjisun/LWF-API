@@ -121,7 +121,6 @@ exports.getDoctorProfile = async (req, res) => {
     const { doctorId } = req.params;
 
     const profile = await DoctorProfile.findOne({ doctor: doctorId }).populate("doctor", "-password");
-
     if (!profile) {
       return res.status(404).json({ message: "Doctor profile not found." });
     }
