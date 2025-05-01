@@ -10,11 +10,11 @@ const cookieParser = require("cookie-parser");
 const mongoose = require("mongoose");
 const userRoutes = require("./routes/userRoutes");
 const authRoutes = require("./routes/authRoutes");
-const emrRoutes = require("./routes/emrRoutes");
-const adminRoutes = require('./routes/adminRoutes');
 const doctorRoutes = require('./routes/doctorRoutes');
+const emrRoutes = require("./routes/emrRoutes");
 const patientRoutes = require('./routes/patientRoutes');
 const patientProfileRoutes = require('./routes/patientProfileRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 const adminProfileRoutes = require('./routes/adminProfileRoutes');
 
 

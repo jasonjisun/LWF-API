@@ -1,4 +1,5 @@
 const Appointment = require("../models/appointmentModel");
+const DoctorProfile = require("../models/doctorProfileModel");
 const User = require("../models/usersModel");
 const Availability = require("../models/availabilityModel");
 
@@ -31,27 +32,46 @@ exports.getAdminDashboardData = async (req, res) => {
 
 exports.getAllAppointmentsForAdmin = async (req, res) => {
   try {
-    const { status } = req.query; // optional status filter (pending, confirmed, cancelled)
+    const { status } = req.query;
+    const filter = status ? { status } : {};
 
-    const filter = {}; // Default filter is empty to get all appointments
-
-    if (status) {
-      filter.status = status; // Filter appointments by status if provided
-    }
-
-    // Query all appointments with optional status filter
     const appointments = await Appointment.find(filter)
-      .populate("patient", "fullName email contactNumber") // Populate patient details
-      .populate("doctor", "fullName specialty") // Populate doctor details
-      .sort({ scheduledDateTime: 1 }); // Sort appointments by scheduled date (soonest first)
+      .populate("patient", "fullName email contactNumber")
+      .lean();
 
-    // If no appointments are found
-    if (appointments.length === 0) {
+    if (!appointments.length) {
       return res.status(404).json({ message: "No appointments found." });
     }
 
-    // Return the appointments
-    res.status(200).json({ appointments });
+    const doctorIds = [...new Set(appointments.map(a => a.doctor?.toString()))];
+
+    const profiles = await DoctorProfile.find({ doctor: { $in: doctorIds } })
+      .populate("doctor", "email")
+      .lean();
+
+    const doctorMap = Object.fromEntries(
+      profiles.map(p => [
+        p.doctor._id.toString(),
+        {
+          name: p.fullName || "Unknown",
+          email: p.doctor.email || null,
+        },
+      ])
+    );
+
+    const result = appointments.map(appt => ({
+      appointmentId: appt._id,
+      patient: appt.patient,
+      doctorId: appt.doctor,
+      doctorName: doctorMap[appt.doctor?.toString()]?.name || "Doctor not found",
+      doctorEmail: doctorMap[appt.doctor?.toString()]?.email || null,
+      scheduledDateTime: appt.scheduledDateTime,
+      status: appt.status,
+      reason: appt.reason,
+      timeSlot: appt.timeSlot,
+    }));
+
+    res.status(200).json({ appointments: result });
   } catch (error) {
     console.error("Error fetching appointments:", error);
     res.status(500).json({ message: "Error retrieving appointments." });
