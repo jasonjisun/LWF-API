@@ -19,6 +19,9 @@ router.post("/profile", verifyJWT(["doctor"]), doctorController.createDoctorProf
 // Get a doctor's profile (accessible to doctor, patient, admin)
 router.get("/profile/:doctorId", verifyJWT(["doctor", "patient", "admin"]), doctorController.getDoctorProfile);
 
+// Get all my confirmed appointments as a doctor
+router.get("/appointments/confirmed", verifyJWT(["doctor"]), doctorController.getConfirmedAppointmentsForDoctor);
+
 // Update a doctor's profile (accessible to doctor themselves or admin)
 router.put("/profile/:doctorId", verifyJWT(["doctor", "admin"]), doctorController.updateDoctorProfile);
 

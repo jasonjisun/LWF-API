@@ -1,4 +1,6 @@
 const Appointment = require("../models/appointmentModel");
+const DoctorProfile = require("../models/doctorProfileModel");
+const PatientProfile = require("../models/patientProfileModel");
 const User = require("../models/usersModel");
 const Availability = require("../models/availabilityModel");
 
@@ -29,46 +31,68 @@ exports.getAdminDashboardData = async (req, res) => {
   }
 };
 
-// All Appointments
-exports.getAdminAppointments = async (req, res) => {
-  try {
-    const appointments = await Appointment.find().sort({
-      scheduledDateTime: 1,
-    });
-    res.json(appointments);
-  } catch (error) {
-    res.status(500).json({ message: "Error fetching appointments" });
-  }
-};
-
 exports.getAllAppointmentsForAdmin = async (req, res) => {
   try {
-    const { status } = req.query; // optional status filter (pending, confirmed, cancelled)
+    const { status } = req.query;
+    const filter = status ? { status } : {};
 
-    const filter = {}; // Default filter is empty to get all appointments
-
-    if (status) {
-      filter.status = status; // Filter appointments by status if provided
-    }
-
-    // Query all appointments with optional status filter
     const appointments = await Appointment.find(filter)
-      .populate("patient", "fullName email contactNumber") // Populate patient details
-      .populate("doctor", "fullName specialty") // Populate doctor details
-      .sort({ scheduledDateTime: 1 }); // Sort appointments by scheduled date (soonest first)
+      .populate("patient", "fullName email contactNumber") // patient is likely the User ref
+      .lean();
 
-    // If no appointments are found
-    if (appointments.length === 0) {
+    if (!appointments.length) {
       return res.status(404).json({ message: "No appointments found." });
     }
 
-    // Return the appointments
-    res.status(200).json({ appointments });
+    const doctorIds = [...new Set(appointments.map(a => a.doctor?.toString()))];
+    const patientUserIds = [...new Set(appointments.map(a => a.patient?._id?.toString()))];
+
+    // Get doctor profiles
+    const profiles = await DoctorProfile.find({ doctor: { $in: doctorIds } })
+      .populate("doctor", "email")
+      .lean();
+
+    const doctorMap = Object.fromEntries(
+      profiles.map(p => [
+        p.doctor._id.toString(),
+        {
+          name: p.fullName || "Unknown",
+          email: p.doctor.email || null,
+        },
+      ])
+    );
+
+    // Get patient profiles
+    const patientProfiles = await PatientProfile.find({ user: { $in: patientUserIds } }).lean();
+
+    const patientMap = Object.fromEntries(
+      patientProfiles.map(p => [p.user.toString(), p.name || "Unknown"])
+    );
+
+    const result = appointments.map(appt => ({
+      appointmentId: appt._id,
+      patient: {
+        userId: appt.patient?._id,
+        fullName: patientMap[appt.patient?._id?.toString()] || appt.patient?.fullName || "Unknown",
+        email: appt.patient?.email || null,
+        contactNumber: appt.patient?.contactNumber || null,
+      },
+      doctorId: appt.doctor,
+      doctorName: doctorMap[appt.doctor?.toString()]?.name || "Doctor not found",
+      doctorEmail: doctorMap[appt.doctor?.toString()]?.email || null,
+      scheduledDateTime: appt.scheduledDateTime,
+      status: appt.status,
+      reason: appt.reason,
+      timeSlot: appt.timeSlot,
+    }));
+
+    res.status(200).json({ appointments: result });
   } catch (error) {
     console.error("Error fetching appointments:", error);
     res.status(500).json({ message: "Error retrieving appointments." });
   }
 };
+
 
 // Confirm the appointment
 exports.confirmAppointment = async (req, res) => {
@@ -103,7 +127,6 @@ exports.confirmAppointment = async (req, res) => {
 exports.cancelAppointment = async (req, res) => {
   try {
     const { appointmentId } = req.params;
-    const { note } = req.body; // The cancellation note
 
     // Find the appointment by ID
     const appointment = await Appointment.findById(appointmentId);
@@ -118,7 +141,6 @@ exports.cancelAppointment = async (req, res) => {
 
     // Update the appointment status to 'cancelled'
     appointment.status = 'cancelled';
-    appointment.cancellationNote = note || 'No cancellation note provided';
     await appointment.save();
 
     res.status(200).json({

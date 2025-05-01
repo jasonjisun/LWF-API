@@ -9,6 +9,7 @@ const {
 const User = require("../models/usersModel");
 const { doHash, doHashValidation, hmacProcess } = require("../utils/hashing");
 const transport = require("../middlewares/sendMail");
+const EMR = require("../models/emrModel");
 const VALID_ROLES = ["admin", "doctor", "patient"];
 
 // 📌 Signup (Register a New User)
@@ -16,7 +17,7 @@ exports.signup = async (req, res) => {
   const { email, password, confirmPassword, role } = req.body;
 
   try {
-    // Validate input (excluding role)
+    // Validate input
     const { error } = signupSchema.validate({ email, password, confirmPassword });
     if (error) {
       return res.status(401).json({ success: false, message: error.details[0].message });
@@ -36,18 +37,40 @@ exports.signup = async (req, res) => {
 
     // Create new user
     const newUser = new User({ email, password: hashedPassword, role: assignedRole });
-
     await newUser.save();
+
+    // If the user is a patient, create an empty EMR with the user's email
+    if (assignedRole === "patient") {
+      const emptyEMR = new EMR({
+        userId: newUser._id,
+        name: "",
+        dob: null,
+        age: null,
+        gender: "",
+        bloodType: "",
+        contact: "",
+        email: newUser.email,  // Fill in the email from the new user
+        address: "",
+        allergies: [],
+        conditions: [],
+        medications: [],
+        visitHistory: [],
+      });
+
+      await emptyEMR.save();
+    }
+
     res.status(201).json({
       success: true,
       message: "Your account has been created successfully!",
-      role: newUser.role, // Return role for frontend use
+      role: newUser.role,
     });
   } catch (error) {
     console.error("Signup Error:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
+
 
 // 📌 Signin (Login)
 exports.signin = async (req, res) => {

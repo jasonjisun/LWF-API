@@ -5,6 +5,8 @@ const verifyJWT = require('../middlewares/verifyJWT'); // Ensure JWT verificatio
 
 // Admin routes
 router.get('/dashboard', verifyJWT, adminController.getAdminDashboardData);
+
+// Get all appointments for admin
 router.get(
     "/appointments",
     verifyJWT(["admin"]), // Ensure the user is authenticated as an admin
@@ -20,6 +22,7 @@ router.patch('/appointments/cancel/:appointmentId', adminController.cancelAppoin
 // Reschedule appointment
 router.patch('/appointments/reschedule/:appointmentId', adminController.rescheduleAppointment);
 
+// Delete appointment schedule
 router.delete("/appointments/:appointmentId", verifyJWT(["admin"]), adminController.deleteAppointmentSchedule);
 
 module.exports = router;
