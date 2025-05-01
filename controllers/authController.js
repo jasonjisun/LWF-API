@@ -39,7 +39,7 @@ exports.signup = async (req, res) => {
     const newUser = new User({ email, password: hashedPassword, role: assignedRole });
     await newUser.save();
 
-    // If the user is a patient, create an empty EMR
+    // If the user is a patient, create an empty EMR with the user's email
     if (assignedRole === "patient") {
       const emptyEMR = new EMR({
         userId: newUser._id,
@@ -49,7 +49,7 @@ exports.signup = async (req, res) => {
         gender: "",
         bloodType: "",
         contact: "",
-        email: "",
+        email: newUser.email,  // Fill in the email from the new user
         address: "",
         allergies: [],
         conditions: [],
