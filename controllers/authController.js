@@ -13,8 +13,6 @@ const EMR = require("../models/emrModel");
 const VALID_ROLES = ["admin", "doctor", "patient"];
 
 // 📌 Signup (Register a New User)
-const EMR = require("../models/EMR"); // Add this at the top
-
 exports.signup = async (req, res) => {
   const { email, password, confirmPassword, role } = req.body;
 
