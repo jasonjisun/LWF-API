@@ -1,6 +1,7 @@
 const Appointment = require('../models/appointmentModel');
 const Availability = require('../models/availabilityModel');
 const DoctorProfile = require("../models/doctorProfileModel");
+const PatientProfile = require("../models/patientProfileModel");
 
 // Dashboard data for doctor
 exports.getDoctorDashboardData = async (req, res) => {
@@ -37,6 +38,46 @@ exports.getPatientAppointmentsForDoctor = async (req, res) => {
     res.status(200).json({ appointments: pendingAppointments });
   } catch (error) {
     console.error("Error fetching patient appointments:", error);
+    res.status(500).json({ message: "Error retrieving appointments." });
+  }
+};
+
+// Get all my confirmed appointments with patients profile details as a doctor
+exports.getConfirmedAppointmentsForDoctor = async (req, res) => {
+  try {
+    const doctorId = req.user._id;
+
+    const confirmedAppointments = await Appointment.find({
+      doctor: doctorId,
+      status: "confirmed",
+    })
+      .populate("patient", "fullName email contactNumber") // from User model
+      .sort({ scheduledDateTime: 1 });
+
+    // Fetch all related patient profiles
+    const patientIds = confirmedAppointments.map((appt) => appt.patient._id);
+    const patientProfiles = await PatientProfile.find({
+      user: { $in: patientIds },
+    });
+
+    // Map profiles by user ID for quick lookup
+    const profileMap = {};
+    patientProfiles.forEach((profile) => {
+      profileMap[profile.user.toString()] = profile;
+    });
+
+    // Attach patientProfile to each appointment
+    const appointmentsWithProfiles = confirmedAppointments.map((appt) => {
+      const profile = profileMap[appt.patient._id.toString()] || null;
+      return {
+        ...appt.toObject(),
+        patientProfile: profile,
+      };
+    });
+
+    res.status(200).json({ appointments: appointmentsWithProfiles });
+  } catch (error) {
+    console.error("Error fetching confirmed appointments:", error);
     res.status(500).json({ message: "Error retrieving appointments." });
   }
 };
