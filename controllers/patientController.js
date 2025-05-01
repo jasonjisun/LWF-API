@@ -1,7 +1,9 @@
 const Appointment = require('../models/appointmentModel');
 const Availability = require('../models/availabilityModel');
 const DoctorProfile = require("../models/doctorProfileModel");
+const Queue = require('../models/queueModel');
 const User = require('../models/usersModel'); // Added for getAvailableDoctors
+const PatientProfile = require('../models/patientProfileModel'); // Added for getAvailableDoctors
 
 // Get patient dashboard data
 exports.getPatientDashboardData = async (req, res) => {
@@ -106,12 +108,15 @@ exports.bookAppointment = async (req, res) => {
   try {
     const { patientId } = req.params;
     const { doctorId, scheduledDateTime, reason, contactInfo } = req.body;
+    console.log(scheduledDateTime);
 
     // Fetch patient manually by ID
     const patient = await User.findById(patientId);
     if (!patient) {
       return res.status(404).json({ message: "Patient not found." });
     }
+
+    const patientProfile = await PatientProfile.findOne({ user: patientId });
 
     // Restrict unverified patients
     if (!patient.verified) {
@@ -122,6 +127,7 @@ exports.bookAppointment = async (req, res) => {
 
     const dateOnly = new Date(scheduledDateTime).toISOString().split("T")[0];
     const timeOnly = new Date(scheduledDateTime).toTimeString().slice(0, 5);
+    const latestQueueEntry = await Queue.findOne({}).sort({ queueNumber: -1 });
 
     const availability = await Availability.findOne({ doctor: doctorId, date: dateOnly });
 
@@ -149,6 +155,15 @@ exports.bookAppointment = async (req, res) => {
       contactInfo,
     });
 
+    const newEntry = new Queue({
+      patientName: patientProfile.name,
+      date: scheduledDateTime,
+      queueNumber: latestQueueEntry ? latestQueueEntry.queueNumber + 1 : 1,
+      department: 'Priority',
+      status: 'waiting',
+    });
+
+    await newEntry.save();
     await newAppointment.save();
 
     res.status(201).json({
