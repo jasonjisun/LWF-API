@@ -1,5 +1,6 @@
 const Appointment = require("../models/appointmentModel");
 const DoctorProfile = require("../models/doctorProfileModel");
+const PatientProfile = require("../models/patientProfileModel");
 const User = require("../models/usersModel");
 const Availability = require("../models/availabilityModel");
 
@@ -36,7 +37,7 @@ exports.getAllAppointmentsForAdmin = async (req, res) => {
     const filter = status ? { status } : {};
 
     const appointments = await Appointment.find(filter)
-      .populate("patient", "fullName email contactNumber")
+      .populate("patient", "fullName email contactNumber") // patient is likely the User ref
       .lean();
 
     if (!appointments.length) {
@@ -44,7 +45,9 @@ exports.getAllAppointmentsForAdmin = async (req, res) => {
     }
 
     const doctorIds = [...new Set(appointments.map(a => a.doctor?.toString()))];
+    const patientUserIds = [...new Set(appointments.map(a => a.patient?._id?.toString()))];
 
+    // Get doctor profiles
     const profiles = await DoctorProfile.find({ doctor: { $in: doctorIds } })
       .populate("doctor", "email")
       .lean();
@@ -59,9 +62,21 @@ exports.getAllAppointmentsForAdmin = async (req, res) => {
       ])
     );
 
+    // Get patient profiles
+    const patientProfiles = await PatientProfile.find({ user: { $in: patientUserIds } }).lean();
+
+    const patientMap = Object.fromEntries(
+      patientProfiles.map(p => [p.user.toString(), p.name || "Unknown"])
+    );
+
     const result = appointments.map(appt => ({
       appointmentId: appt._id,
-      patient: appt.patient,
+      patient: {
+        userId: appt.patient?._id,
+        fullName: patientMap[appt.patient?._id?.toString()] || appt.patient?.fullName || "Unknown",
+        email: appt.patient?.email || null,
+        contactNumber: appt.patient?.contactNumber || null,
+      },
       doctorId: appt.doctor,
       doctorName: doctorMap[appt.doctor?.toString()]?.name || "Doctor not found",
       doctorEmail: doctorMap[appt.doctor?.toString()]?.email || null,
@@ -77,6 +92,7 @@ exports.getAllAppointmentsForAdmin = async (req, res) => {
     res.status(500).json({ message: "Error retrieving appointments." });
   }
 };
+
 
 // Confirm the appointment
 exports.confirmAppointment = async (req, res) => {

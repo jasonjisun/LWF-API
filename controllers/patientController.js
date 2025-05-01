@@ -25,7 +25,7 @@ exports.getAllDoctorsWithProfiles = async (req, res) => {
         match: { role: "doctor" },
         select: "_id email verified"
       })
-      .select("fullName specialization doctor");
+      .select("fullName specialization phone doctor"); // Include 'phone'
 
     // Filter out any where the linked user is null
     const filtered = doctors.filter(doc => doc.doctor);
@@ -36,6 +36,7 @@ exports.getAllDoctorsWithProfiles = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch doctor list" });
   }
 };
+
 
 // Get list of doctors
 exports.getAvailableDoctors = async (req, res) => {
