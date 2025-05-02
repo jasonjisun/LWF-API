@@ -117,6 +117,19 @@ exports.completeQueueEntry = async (req, res) => {
     }
 }
 
+exports.resetQueue = async (req, res) => {
+    try {
+        // delete all queue entries
+        await Queue.deleteMany({}); // Delete all queue entries
+
+        res.status(200).json({ message: 'Queue reset successfully' }); // Return success message
+
+    } catch (error) {
+        console.error('Error resetting queue:', error);
+        res.status(500).json({ message: 'Error resetting queue' });
+    }
+}
+
 exports.cancelQueueEntry = async (req, res) => {
     try {
         

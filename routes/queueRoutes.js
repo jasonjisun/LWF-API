@@ -11,7 +11,8 @@ const {
     getQueueByDate,
     getQueueByPatient,
     getQueueByStatus,
-    getQueueByPriority
+    getQueueByPriority,
+    resetQueue
 } = require('../controllers/queueController');
 
 const verifyJWT = require('../middlewares/verifyJWT');
@@ -53,5 +54,8 @@ router.get('/status/:status', verifyJWT(['admin', 'doctor']), getQueueByStatus);
 
 // Get queue by priority
 router.get('/priority/:priority', verifyJWT(['admin', 'doctor']), getQueueByPriority);
+
+// Reset the queue
+router.post('/reset', verifyJWT(['admin', 'doctor']), resetQueue);
 
 module.exports = router;
