@@ -42,20 +42,20 @@ exports.getPatientAppointmentsForDoctor = async (req, res) => {
   }
 };
 
-// Get all my confirmed appointments with patients profile details as a doctor
+// Get all confirmed and rescheduled appointments with patient profile details for a doctor
 exports.getConfirmedAppointmentsForDoctor = async (req, res) => {
   try {
     const doctorId = req.user._id;
 
-    const confirmedAppointments = await Appointment.find({
+    const appointments = await Appointment.find({
       doctor: doctorId,
-      status: "confirmed",
+      status: { $in: ["confirmed", "rescheduled"] }, // ← key change here
     })
-      .populate("patient", "fullName email contactNumber") // from User model
+      .populate("patient", "fullName email contactNumber")
       .sort({ scheduledDateTime: 1 });
 
     // Fetch all related patient profiles
-    const patientIds = confirmedAppointments.map((appt) => appt.patient._id);
+    const patientIds = appointments.map((appt) => appt.patient._id);
     const patientProfiles = await PatientProfile.find({
       user: { $in: patientIds },
     });
@@ -67,7 +67,7 @@ exports.getConfirmedAppointmentsForDoctor = async (req, res) => {
     });
 
     // Attach patientProfile to each appointment
-    const appointmentsWithProfiles = confirmedAppointments.map((appt) => {
+    const appointmentsWithProfiles = appointments.map((appt) => {
       const profile = profileMap[appt.patient._id.toString()] || null;
       return {
         ...appt.toObject(),
@@ -77,10 +77,11 @@ exports.getConfirmedAppointmentsForDoctor = async (req, res) => {
 
     res.status(200).json({ appointments: appointmentsWithProfiles });
   } catch (error) {
-    console.error("Error fetching confirmed appointments:", error);
+    console.error("Error fetching appointments:", error);
     res.status(500).json({ message: "Error retrieving appointments." });
   }
 };
+
 
 // Doctor or Admin reschedules an appointment
 exports.rescheduleAppointment = async (req, res) => {
