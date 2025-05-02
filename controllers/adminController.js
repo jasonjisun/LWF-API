@@ -114,19 +114,28 @@ exports.confirmAppointment = async (req, res) => {
       return res.status(404).json({ message: "Appointment not found." });
     }
 
-    // If already confirmed, no need to confirm again
+    // If already confirmed, return early
     if (appointment.status === "confirmed") {
-      return res
-        .status(400)
-        .json({ message: "Appointment is already confirmed." });
+      return res.status(400).json({ message: "Appointment is already confirmed." });
     }
 
     // Update the appointment status to 'confirmed'
     appointment.status = "confirmed";
     await appointment.save();
 
+    // Extract relevant fields
+    const doctorId = appointment.doctor;
+    const date = appointment.scheduledDateTime.toISOString().split('T')[0]; // Get YYYY-MM-DD
+    const timeSlot = appointment.timeSlot;
+
+    // Update availability: remove the confirmed timeSlot for the doctor on that date
+    await Availability.findOneAndUpdate(
+      { doctor: doctorId, date },
+      { $pull: { timeSlots: timeSlot } }
+    );
+
     res.status(200).json({
-      message: "Appointment confirmed successfully.",
+      message: "Appointment confirmed and schedule updated successfully.",
       appointment,
     });
   } catch (error) {
