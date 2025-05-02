@@ -119,10 +119,18 @@ exports.completeQueueEntry = async (req, res) => {
 
 exports.resetQueue = async (req, res) => {
     try {
-        // delete all queue entries
-        await Queue.deleteMany({}); // Delete all queue entries
+        // get all queue entries
+        const queueEntries = await Queue.find({}); // Find all queue entries
 
+        if (queueEntries.length === 0) {
+            return res.status(404).json({ message: 'No queue entries found' }); // If not found, return 404
+        }
+        // delete all queue entries loop through each entry and delete it
+        for (const entry of queueEntries) {
+            await Queue.deleteOne({ _id: entry._id }); // Delete each queue entry
+        }
         res.status(200).json({ message: 'Queue reset successfully' }); // Return success message
+        
 
     } catch (error) {
         console.error('Error resetting queue:', error);
