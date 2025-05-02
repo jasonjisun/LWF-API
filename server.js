@@ -17,6 +17,7 @@ const patientProfileRoutes = require('./routes/patientProfileRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const adminProfileRoutes = require('./routes/adminProfileRoutes');
 const queueRoutes = require('./routes/queueRoutes');
+const logsRoutes = require('./routes/logsRoutes'); 
 
 const app = express();
 
@@ -64,6 +65,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/admin', adminProfileRoutes);
 app.use('/api/patient', patientProfileRoutes);
 app.use('/api/queue', queueRoutes);
+app.use('/api/logs', logsRoutes);
 
 // 🎯 Base API Route
 app.get("/", (req, res) => {

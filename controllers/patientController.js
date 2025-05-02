@@ -4,6 +4,7 @@ const DoctorProfile = require("../models/doctorProfileModel");
 const Queue = require('../models/queueModel');
 const User = require('../models/usersModel'); // Added for getAvailableDoctors
 const PatientProfile = require('../models/patientProfileModel'); // Added for getAvailableDoctors
+const Log = require('../models/logsModel');
 
 // Get patient dashboard data
 exports.getPatientDashboardData = async (req, res) => {
@@ -111,9 +112,20 @@ exports.bookAppointment = async (req, res) => {
     const { doctorId, scheduledDateTime, reason, contactInfo } = req.body;
     console.log(scheduledDateTime);
 
+    const user = req.user; // assumes verifyJWT middleware
+    const ip = req.ip;
+    const endpoint = req.originalUrl;
+
     // Fetch patient manually by ID
     const patient = await User.findById(patientId);
     if (!patient) {
+      await Log.create({
+        action: 'Book Appointment - Patient not found',
+        role: user?.role || 'unknown',
+        email: user?.email || 'unknown',
+        ip,
+        endpoint
+      });
       return res.status(404).json({ message: "Patient not found." });
     }
 
@@ -121,6 +133,13 @@ exports.bookAppointment = async (req, res) => {
 
     // Restrict unverified patients
     if (!patient.verified) {
+      await Log.create({
+        action: 'Book Appointment - Unverified account',
+        role: user?.role || 'unknown',
+        email: user?.email || 'unknown',
+        ip,
+        endpoint
+      });
       return res.status(403).json({
         message: "Account not verified. Please verify your account before booking an appointment.",
       });
@@ -133,6 +152,13 @@ exports.bookAppointment = async (req, res) => {
     const availability = await Availability.findOne({ doctor: doctorId, date: dateOnly });
 
     if (!availability || !availability.timeSlots.includes(timeOnly)) {
+      await Log.create({
+        action: 'Book Appointment - Doctor not available',
+        role: user?.role || 'unknown',
+        email: user?.email || 'unknown',
+        ip,
+        endpoint
+      });
       return res.status(400).json({ message: "Doctor is not available at the selected time." });
     }
 
@@ -143,6 +169,13 @@ exports.bookAppointment = async (req, res) => {
     });
 
     if (conflict) {
+      await Log.create({
+        action: 'Book Appointment - Time slot conflict',
+        role: user?.role || 'unknown',
+        email: user?.email || 'unknown',
+        ip,
+        endpoint
+      });
       return res.status(400).json({ message: "Time slot already booked." });
     }
 
@@ -167,6 +200,14 @@ exports.bookAppointment = async (req, res) => {
     await newEntry.save();
     await newAppointment.save();
 
+    await Log.create({
+      action: 'Book Appointment - Success',
+      role: user?.role || 'unknown',
+      email: user?.email || 'unknown',
+      ip,
+      endpoint
+    });
+
     res.status(201).json({
       message: "Appointment booked successfully.",
       newAppointment: {
@@ -184,6 +225,15 @@ exports.bookAppointment = async (req, res) => {
     });
   } catch (error) {
     console.error("Error booking appointment:", error);
+
+    await Log.create({
+      action: 'Book Appointment - Server error',
+      role: req.user?.role || 'unknown',
+      email: req.user?.email || 'unknown',
+      ip: req.ip,
+      endpoint: req.originalUrl
+    });
+
     res.status(500).json({ message: "Error booking appointment." });
   }
 };
