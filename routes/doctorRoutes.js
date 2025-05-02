@@ -11,7 +11,7 @@ router.post('/availability', verifyJWT(['doctor', 'admin']), availabilityControl
 router.get('/dashboard', verifyJWT, doctorController.getDoctorDashboardData);
 
 // Reschedule an appointment
-router.post('/reschedule-appointment', verifyJWT, doctorController.rescheduleAppointment);
+router.post('/reschedule-appointment/:appointmentId', verifyJWT, doctorController.rescheduleAppointment);
 
 // Create a doctor profile (only doctors)
 router.post("/profile", verifyJWT(["doctor"]), doctorController.createDoctorProfile);

@@ -82,27 +82,45 @@ exports.getConfirmedAppointmentsForDoctor = async (req, res) => {
   }
 };
 
-// Doctor reschedules an appointment (goes back to pending)
+// Doctor or Admin reschedules an appointment
 exports.rescheduleAppointment = async (req, res) => {
   try {
-    const { appointmentId, newScheduledDateTime } = req.body;
+    const { appointmentId, newScheduledDateTime, skipAvailabilityCheck = false } = req.body;
     const appointment = await Appointment.findById(appointmentId);
 
     if (!appointment) return res.status(404).json({ message: "Appointment not found." });
 
+    // If the user is a doctor, they can only reschedule appointments for themselves
+    if (req.user.role === "doctor" && appointment.doctor.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "You can only reschedule your own appointments." });
+    }
+
     const dateOnly = new Date(newScheduledDateTime).toISOString().split("T")[0];
     const timeOnly = new Date(newScheduledDateTime).toTimeString().slice(0, 5);
 
-    const availability = await Availability.findOne({ doctor: appointment.doctor, date: dateOnly });
+    // Log the value of skipAvailabilityCheck for debugging
+    console.log('skipAvailabilityCheck:', skipAvailabilityCheck);
 
-    if (!availability || !availability.timeSlots.includes(timeOnly)) {
-      return res.status(400).json({ message: "Doctor not available at that time." });
+    // If skipAvailabilityCheck is not true, check the doctor's availability
+    if (skipAvailabilityCheck !== true) {
+      const availability = await Availability.findOne({ doctor: appointment.doctor, date: dateOnly });
+
+      if (!availability || !availability.timeSlots.includes(timeOnly)) {
+        return res.status(400).json({ message: "Doctor is not available at the selected time." });
+      }
+
+      // Remove the old slot after rescheduling
+      availability.timeSlots = availability.timeSlots.filter(slot => slot !== timeOnly);
+      await availability.save();
+    } else {
+      console.log('Skipping availability check as per the flag.');
     }
 
+    // Check if the time slot is already booked by another appointment
     const conflict = await Appointment.findOne({
       doctor: appointment.doctor,
       scheduledDateTime: newScheduledDateTime,
-      status: { $ne: "canceled" },
+      status: { $ne: "cancelled" },
       _id: { $ne: appointmentId },
     });
 
@@ -110,14 +128,11 @@ exports.rescheduleAppointment = async (req, res) => {
       return res.status(400).json({ message: "Time slot already booked." });
     }
 
+    // Update the appointment details
     appointment.scheduledDateTime = newScheduledDateTime;
     appointment.timeSlot = timeOnly;
-    appointment.status = req.user.role === "admin" ? "confirmed" : "pending";
+    appointment.status = req.user.role === "admin" ? "confirmed" : "pending";  // Admin confirms, Doctor keeps pending
     await appointment.save();
-
-    // remove old slot, add new if needed
-    availability.timeSlots = availability.timeSlots.filter(slot => slot !== timeOnly);
-    await availability.save();
 
     res.status(200).json({ message: "Appointment rescheduled.", appointment });
   } catch (error) {

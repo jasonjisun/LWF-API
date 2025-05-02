@@ -165,14 +165,22 @@ exports.rescheduleAppointment = async (req, res) => {
       return res.status(404).json({ message: 'Appointment not found.' });
     }
 
-    // If already cancelled, can't reschedule
+    // Prevent rescheduling if the appointment is cancelled
     if (appointment.status === 'cancelled') {
       return res.status(400).json({ message: 'Cannot reschedule a cancelled appointment.' });
     }
 
-    // Check if the new scheduled time is available
+    // Check if the logged-in user is allowed to reschedule this appointment
+    // Admins can reschedule any appointment, while doctors can only reschedule their own appointments
+    if (req.user.role === 'doctor' && appointment.doctor.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'You can only reschedule your own appointments.' });
+    }
+
+    // Extract the date and time from the newScheduledDateTime
     const dateOnly = new Date(newScheduledDateTime).toISOString().split("T")[0];
     const timeOnly = new Date(newScheduledDateTime).toTimeString().slice(0, 5);
+
+    // Check the availability of the doctor for the new time
     const availability = await Availability.findOne({
       doctor: appointment.doctor,
       date: dateOnly,
@@ -182,9 +190,21 @@ exports.rescheduleAppointment = async (req, res) => {
       return res.status(400).json({ message: 'Doctor is not available at the selected time.' });
     }
 
-    // Update the appointment's scheduled time and status to pending
+    // Check if the new time is already taken by another appointment for the same doctor
+    const conflict = await Appointment.findOne({
+      doctor: appointment.doctor,
+      scheduledDateTime: newScheduledDateTime,
+      status: { $ne: 'cancelled' }, // Ensure it's not cancelled
+      _id: { $ne: appointmentId }, // Ensure it's not the same appointment
+    });
+
+    if (conflict) {
+      return res.status(400).json({ message: 'Time slot already booked.' });
+    }
+
+    // Update the appointment's scheduled time and set the status
     appointment.scheduledDateTime = newScheduledDateTime;
-    appointment.status = 'pending'; // Reset status to pending
+    appointment.status = req.user.role === 'admin' ? 'confirmed' : 'pending';  // Admin confirms, doctor keeps pending
     await appointment.save();
 
     res.status(200).json({
