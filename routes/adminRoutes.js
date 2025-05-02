@@ -20,7 +20,7 @@ router.patch('/appointments/confirm/:appointmentId', adminController.confirmAppo
 router.patch('/appointments/cancel/:appointmentId', adminController.cancelAppointment);
 
 // Reschedule appointment
-router.patch('/appointments/reschedule/:appointmentId', adminController.rescheduleAppointment);
+router.patch('/appointments/reschedule/:appointmentId', verifyJWT(['admin']), adminController.rescheduleAppointment);
 
 // Delete appointment schedule
 router.delete("/appointments/:appointmentId", verifyJWT(["admin"]), adminController.deleteAppointmentSchedule);
