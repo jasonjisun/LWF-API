@@ -23,6 +23,6 @@ router.patch('/appointments/cancel/:appointmentId', adminController.cancelAppoin
 router.patch('/appointments/reschedule/:appointmentId', verifyJWT(['admin','doctor']), adminController.rescheduleAppointment);
 
 // Delete appointment schedule
-router.delete("/appointments/:appointmentId", verifyJWT(["admin"]), adminController.deleteAppointmentSchedule);
+router.delete("/delete-appointment/:appointmentId", verifyJWT(["admin","doctor"]), adminController.deleteAppointmentSchedule);
 
 module.exports = router;

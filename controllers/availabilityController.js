@@ -1,68 +1,78 @@
 const Availability = require('../models/availabilityModel');
+const DoctorProfile = require('../models/doctorProfileModel');
 const Log = require('../models/logsModel');
 
 // SET Availability (No changes needed)
 exports.setAvailability = async (req, res) => {
-  try {
-    const doctorId = req.user._id;
-    const { date, timeSlots } = req.body;
+  const doctorId = req.user?._id;
+  const { date, timeSlots, status = "available" } = req.body;
 
-    // Check for missing required fields
+  try {
     if (!doctorId || !date || !Array.isArray(timeSlots)) {
-      // Log the missing required fields
       await Log.create({
-        action: 'SET_AVAILABILITY_FAILED',
-        email: req.user ? req.user.email : 'unknown',
-        role: req.user ? req.user.role : 'unknown',
+        action: "SET_AVAILABILITY_FAILED",
+        email: req.user?.email || "unknown",
+        role: req.user?.role || "unknown",
         ip: req.ip,
         endpoint: req.originalUrl,
-        doctorId: doctorId,
-        message: 'Missing required fields for setting availability.',
-        details: { date, timeSlots }
+        doctorId,
+        message: "Missing required fields for setting availability.",
+        details: { date, timeSlots },
       });
-
       return res.status(400).json({ message: "Missing required fields." });
     }
 
     const normalizedDate = new Date(date).toISOString().split("T")[0];
-    const normalizedSlots = timeSlots.map(slot => slot.trim());
+    const normalizedSlots = timeSlots.map((slot) => slot.trim());
 
-    // Check if availability for the given doctor and date already exists
-    let availability = await Availability.findOne({ doctor: doctorId, date: normalizedDate });
+    let availability = await Availability.findOne({
+      doctor: doctorId,
+      date: normalizedDate,
+    });
 
     if (availability) {
-      const mergedSlots = Array.from(new Set([...availability.timeSlots, ...normalizedSlots]));
-      availability.timeSlots = mergedSlots;
+      if (status === "unavailable") {
+        availability.timeSlots = normalizedSlots;
+        availability.status = "unavailable";
+      } else {
+        const mergedSlots = Array.from(
+          new Set([...availability.timeSlots, ...normalizedSlots])
+        );
+        availability.timeSlots = mergedSlots;
+        availability.status = "available";
+      }
+
       await availability.save();
 
-      // Log successful availability update
       await Log.create({
-        action: 'AVAILABILITY_UPDATED',
-        email: req.user ? req.user.email : 'unknown',
-        role: req.user ? req.user.role : 'unknown',
+        action: "AVAILABILITY_UPDATED",
+        email: req.user?.email || "unknown",
+        role: req.user?.role || "unknown",
         ip: req.ip,
         endpoint: req.originalUrl,
-        doctorId: doctorId,
-        message: 'Availability updated successfully.',
-        updatedSlots: mergedSlots,
+        doctorId,
+        message: "Availability updated successfully.",
+        updatedSlots: availability.timeSlots,
+        status: availability.status,
       });
     } else {
       availability = await Availability.create({
         doctor: doctorId,
         date: normalizedDate,
         timeSlots: normalizedSlots,
+        status,
       });
 
-      // Log new availability creation
       await Log.create({
-        action: 'AVAILABILITY_CREATED',
-        email: req.user ? req.user.email : 'unknown',
-        role: req.user ? req.user.role : 'unknown',
+        action: "AVAILABILITY_CREATED",
+        email: req.user?.email || "unknown",
+        role: req.user?.role || "unknown",
         ip: req.ip,
         endpoint: req.originalUrl,
-        doctorId: doctorId,
-        message: 'New availability set successfully.',
+        doctorId,
+        message: "New availability set successfully.",
         createdSlots: normalizedSlots,
+        status,
       });
     }
 
@@ -73,19 +83,48 @@ exports.setAvailability = async (req, res) => {
   } catch (error) {
     console.error("Error setting availability:", error);
 
-    // Log error during setting availability
     await Log.create({
-      action: 'AVAILABILITY_SET_ERROR',
-      email: req.user ? req.user.email : 'unknown',
-      role: req.user ? req.user.role : 'unknown',
+      action: "AVAILABILITY_SET_ERROR",
+      email: req.user?.email || "unknown",
+      role: req.user?.role || "unknown",
       ip: req.ip,
       endpoint: req.originalUrl,
-      doctorId: doctorId,
-      message: 'Error setting availability.',
-      error: error.message, // Include the error message for debugging
+      doctorId,
+      message: "Error setting availability.",
+      error: error.message,
     });
 
     return res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+exports.updateAvailabilityStatus = async (req, res) => {
+  try {
+    const { id } = req.params; // The availability ID
+    const status = req.params.status; // The status (either "available" or "unavailable")
+
+    // Validate that the status is either "available" or "unavailable"
+    if (!["available", "unavailable"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status provided." });
+    }
+
+    // Find the availability entry by ID and update the status
+    const updated = await Availability.findByIdAndUpdate(
+      id, // availability ID from the URL
+      { status }, // set the status to the given value
+      { new: true } // return the updated document
+    );
+
+    // If the availability entry does not exist, return a 404 error
+    if (!updated) {
+      return res.status(404).json({ message: "Availability not found." });
+    }
+
+    // Send the updated availability back as the response
+    res.json({ success: true, availability: updated });
+  } catch (err) {
+    console.error("Error updating status:", err);
+    res.status(500).json({ message: "Server error." });
   }
 };
 
@@ -388,5 +427,46 @@ exports.rescheduleAvailability = async (req, res) => {
     });
 
     res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+exports.getMyAvailabilitySchedule = async (req, res) => {
+  try {
+    // Ensure the user is a doctor
+    if (req.user.role !== "doctor") {
+      return res.status(403).json({ success: false, message: "Access denied." });
+    }
+
+    // Get the doctor's profile
+    const doctorProfile = await DoctorProfile.findOne({ doctor: req.user._id }).select("fullName specialization");
+
+    if (!doctorProfile) {
+      return res.status(404).json({ success: false, message: "Doctor profile not found." });
+    }
+
+    // Get all availabilities (available and unavailable)
+    const allAvailabilities = await Availability.find({ doctor: req.user._id }).sort({ date: 1 });
+
+    // Separate by status (optional, but useful for frontend clarity)
+    const available = allAvailabilities.filter(a => a.status === "available");
+    const unavailable = allAvailabilities.filter(a => a.status === "unavailable");
+
+    // Build response
+    res.status(200).json({
+      success: true,
+      doctor: {
+        id: req.user._id,
+        email: req.user.email,
+        fullName: doctorProfile.fullName,
+        specialization: doctorProfile.specialization,
+      },
+      availability: {
+        available,
+        unavailable,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching your availability:", error);
+    res.status(500).json({ success: false, message: "Internal server error." });
   }
 };

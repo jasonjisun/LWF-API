@@ -4,6 +4,10 @@ const doctorController = require('../controllers/doctorController');
 const availabilityController = require('../controllers/availabilityController');
 const verifyJWT = require('../middlewares/verifyJWT');
 
+
+// Doctor dashboard data
+router.get('/dashboard', verifyJWT, doctorController.getDoctorDashboardData);
+
 // Admin or Doctor AVAILABILITY routes
 // Set availability (No change needed here)
 router.post('/availability', verifyJWT(['doctor', 'admin']), availabilityController.setAvailability);
@@ -14,8 +18,14 @@ router.put("/reschedule/:availabilityId", verifyJWT(["admin", "doctor"]), availa
 // Delete specific time slot from availability
 router.delete("/delete/:availabilityId", verifyJWT(["admin", "doctor"]), availabilityController.deleteAvailability);
 
-// Doctor dashboard data
-router.get('/dashboard', verifyJWT, doctorController.getDoctorDashboardData);
+// PATCH /api/doctor/availability/:id/:status
+router.patch(
+    "/availability/:id/:status",
+    verifyJWT(),
+    availabilityController.updateAvailabilityStatus
+  );
+
+router.get('/my-availability', verifyJWT(['doctor', 'admin']), availabilityController.getMyAvailabilitySchedule);
 
 // Reschedule an appointment
 router.post('/reschedule-appointment/:appointmentId', verifyJWT, doctorController.rescheduleAppointment);

@@ -8,7 +8,11 @@ const availabilitySchema = new mongoose.Schema({
   },
   date: { type: String, required: true },
   timeSlots: [{ type: String }],
+  status: {
+    type: String,
+    enum: ["available", "unavailable"],
+    default: "available",
+  },
 });
-
 
 module.exports = mongoose.model("Availability", availabilitySchema);

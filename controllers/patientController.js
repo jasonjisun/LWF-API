@@ -46,19 +46,39 @@ exports.getAvailableDoctors = async (req, res) => {
   try {
     const doctorProfiles = await DoctorProfile.find()
       .populate({
-        path: 'doctor',
-        match: { role: 'doctor' }, // ensure linked user is a doctor
-        select: '_id email'        // include only needed fields
+        path: "doctor",
+        match: { role: "doctor" },
+        select: "_id email",
       })
-      .select('fullName specialization doctor');
+      .select("fullName specialization doctor");
 
-    // Optional: filter out ones where doctor reference was not matched
-    const filteredDoctors = doctorProfiles.filter(profile => profile.doctor !== null);
+    const filteredDoctors = doctorProfiles.filter(
+      (profile) => profile.doctor !== null
+    );
 
-    res.json(filteredDoctors);
+    const doctorsWithStatuses = await Promise.all(
+      filteredDoctors.map(async (profile) => {
+        const allAvailabilities = await Availability.find({
+          doctor: profile.doctor._id,
+        });
+
+        const available = allAvailabilities.filter(a => a.status === "available");
+        const unavailable = allAvailabilities.filter(a => a.status === "unavailable");
+
+        return {
+          ...profile.toObject(),
+          availability: {
+            available,
+            unavailable,
+          },
+        };
+      })
+    );
+
+    res.status(200).json(doctorsWithStatuses);
   } catch (error) {
-    console.error("Error fetching doctors:", error);
-    res.status(500).json({ message: 'Error fetching doctors' });
+    console.error("Error fetching doctors' availability:", error);
+    res.status(500).json({ message: "Error fetching doctors' availability" });
   }
 };
 
@@ -66,24 +86,31 @@ exports.getAvailableSchedules = async (req, res) => {
   try {
     const doctorId = req.params.doctorId;
 
-    const availabilities = await Availability.find({ doctor: doctorId });
+    // Only fetch availability documents marked as "available"
+    const availabilities = await Availability.find({ 
+      doctor: doctorId, 
+      status: "available" 
+    });
 
     const now = new Date();
+
+    // Get all appointments that are upcoming AND either pending or confirmed
     const bookedAppointments = await Appointment.find({
       doctor: doctorId,
       scheduledDateTime: { $gte: now },
+      status: { $in: ["pending", "confirmed"] } // 🔧 include pending ones
     });
 
     let availableDateTimes = [];
 
     availabilities.forEach((availability) => {
       const date = new Date(availability.date);
-      if (isNaN(date)) return; // Skip if invalid
+      if (isNaN(date)) return;
 
       const dateStr = date.toISOString().slice(0, 10);
 
       availability.timeSlots.forEach((time) => {
-        if (!/^\d{2}:\d{2}$/.test(time)) return; // Ensure HH:MM format
+        if (!/^\d{2}:\d{2}$/.test(time)) return;
 
         const dateTime = new Date(`${dateStr}T${time}:00`);
         if (!isNaN(dateTime)) {
@@ -92,10 +119,10 @@ exports.getAvailableSchedules = async (req, res) => {
       });
     });
 
-    // Remove booked appointments
-    const bookedSet = new Set(bookedAppointments.map((appt) =>
-      new Date(appt.scheduledDateTime).toISOString()
-    ));
+    // Exclude slots already booked (pending or confirmed)
+    const bookedSet = new Set(
+      bookedAppointments.map((appt) => new Date(appt.scheduledDateTime).toISOString())
+    );
 
     const filtered = availableDateTimes.filter(dt => !bookedSet.has(dt));
 
@@ -106,11 +133,23 @@ exports.getAvailableSchedules = async (req, res) => {
   }
 };
 
+
 exports.bookAppointment = async (req, res) => {
   try {
     const { patientId } = req.params;
     const { doctorId, scheduledDateTime, reason, contactInfo } = req.body;
-    console.log(scheduledDateTime);
+
+    // Check if the patient already has a pending appointment
+    const existingPendingAppointment = await Appointment.findOne({
+      patient: patientId,
+      status: 'pending',
+    });
+
+    if (existingPendingAppointment) {
+      return res.status(400).json({
+        message: "You already have a pending appointment. Please wait for it to be confirmed or canceled before booking another one.",
+      });
+    }
 
     const user = req.user; // assumes verifyJWT middleware
     const ip = req.ip;
