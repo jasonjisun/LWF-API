@@ -26,7 +26,7 @@ const app = express();
 app.use(helmet());
 app.use(
   cors({
-    origin: "http://localhost:5173", // Change this to match your frontend URL
+    origin: "https://appointment-lwf-queue.onrender.com", // Change this to match your frontend URL
     credentials: true, // Allow cookies/session sharing
   })
 );
