@@ -98,23 +98,31 @@ exports.getAvailableSchedules = async (req, res) => {
     const bookedAppointments = await Appointment.find({
       doctor: doctorId,
       scheduledDateTime: { $gte: now },
-      status: { $in: ["pending", "confirmed"] } // 🔧 include pending ones
+      status: { $in: ["pending", "confirmed"] }
     });
 
     let availableDateTimes = [];
 
     availabilities.forEach((availability) => {
-      const date = new Date(availability.date);
-      if (isNaN(date)) return;
-
-      const dateStr = date.toISOString().slice(0, 10);
+      const dateObj = new Date(availability.date);
+      if (isNaN(dateObj)) return;
 
       availability.timeSlots.forEach((time) => {
         if (!/^\d{2}:\d{2}$/.test(time)) return;
 
-        const dateTime = new Date(`${dateStr}T${time}:00`);
-        if (!isNaN(dateTime)) {
-          availableDateTimes.push(dateTime.toISOString());
+        const [hour, minute] = time.split(":").map(Number);
+
+        // Construct a local datetime using year/month/day/hour/minute
+        const localDateTime = new Date(
+          dateObj.getFullYear(),
+          dateObj.getMonth(),
+          dateObj.getDate(),
+          hour,
+          minute
+        );
+
+        if (!isNaN(localDateTime)) {
+          availableDateTimes.push(localDateTime.toISOString()); // always in UTC
         }
       });
     });
