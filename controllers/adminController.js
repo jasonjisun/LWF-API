@@ -38,7 +38,7 @@ exports.getAllAppointmentsForAdmin = async (req, res) => {
     const filter = status ? { status } : {};
 
     const appointments = await Appointment.find(filter)
-      .populate("patient", "fullName email contactNumber") // patient is likely the User ref
+      .populate("patient", "fullName email") // Removed contactNumber (not in User schema)
       .lean();
 
     if (!appointments.length) {
@@ -73,29 +73,37 @@ exports.getAllAppointmentsForAdmin = async (req, res) => {
     }).lean();
 
     const patientMap = Object.fromEntries(
-      patientProfiles.map((p) => [p.user.toString(), p.name || "Unknown"])
+      patientProfiles.map((p) => [
+        p.user.toString(),
+        {
+          name: p.name || "Unknown",
+          contact: p.contact || null,
+        },
+      ])
     );
 
-    const result = appointments.map((appt) => ({
-      appointmentId: appt._id,
-      patient: {
-        userId: appt.patient?._id,
-        fullName:
-          patientMap[appt.patient?._id?.toString()] ||
-          appt.patient?.fullName ||
-          "Unknown",
-        email: appt.patient?.email || null,
-        contactNumber: appt.patient?.contactNumber || null,
-      },
-      doctorId: appt.doctor,
-      doctorName:
-        doctorMap[appt.doctor?.toString()]?.name || "Doctor not found",
-      doctorEmail: doctorMap[appt.doctor?.toString()]?.email || null,
-      scheduledDateTime: appt.scheduledDateTime,
-      status: appt.status,
-      reason: appt.reason,
-      timeSlot: appt.timeSlot,
-    }));
+    const result = appointments.map((appt) => {
+      const patientId = appt.patient?._id?.toString();
+      const patientInfo = patientMap[patientId] || {};
+
+      return {
+        appointmentId: appt._id,
+        patient: {
+          userId: appt.patient?._id,
+          fullName: patientInfo.name || appt.patient?.fullName || "Unknown",
+          email: appt.patient?.email || null,
+          contactNumber: patientInfo.contact || null,
+        },
+        doctorId: appt.doctor,
+        doctorName:
+          doctorMap[appt.doctor?.toString()]?.name || "Doctor not found",
+        doctorEmail: doctorMap[appt.doctor?.toString()]?.email || null,
+        scheduledDateTime: appt.scheduledDateTime,
+        status: appt.status,
+        reason: appt.reason,
+        timeSlot: appt.timeSlot,
+      };
+    });
 
     res.status(200).json({ appointments: result });
   } catch (error) {
@@ -103,6 +111,7 @@ exports.getAllAppointmentsForAdmin = async (req, res) => {
     res.status(500).json({ message: "Error retrieving appointments." });
   }
 };
+
 
 // Confirm the appointment
 exports.confirmAppointment = async (req, res) => {
