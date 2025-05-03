@@ -23,11 +23,6 @@ const logsRoutes = require('./routes/logsRoutes');
 const app = express();
 
 // 🔒 Security Middleware
-app.use(helmet());
-app.use(
-  cors()
-);
-
 app.use(cookieParser());
 
 // 🛠 Express Middleware
