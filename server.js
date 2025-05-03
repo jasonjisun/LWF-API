@@ -2,6 +2,7 @@ require("dotenv").config();
 require("./middlewares/passport");
 const path = require("path");
 const express = require("express");
+const cron = require("node-cron");
 const passport = require("passport");
 const session = require("express-session");
 const helmet = require("helmet");
@@ -77,8 +78,19 @@ app.get("/", (req, res) => {
   res.json({ message: "🚀 Server is running!" });
 });
 
+const pingServer = () => {
+  http
+    .get("https://appointment-lwf-queue.onrender.com", (res) => {
+      console.log("Pinged server, status code:", res.statusCode);
+    })
+    .on("error", (err) => {
+      console.error("Error pinging server:", err.message);
+    });
+};
+
 // 🚀 Start the Server
 const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => {
   console.log(`✅ Server is running on port ${PORT}`);
+  cron.schedule("/5 * * *", pingServer);
 });
