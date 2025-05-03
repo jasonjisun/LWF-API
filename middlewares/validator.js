@@ -38,15 +38,9 @@ exports.signinSchema = Joi.object({
 });
 
 exports.acceptCodeSchema = Joi.object({
-  email: Joi.string()
-    .min(6)
-    .max(60)
-    .required()
-    .email({
-      tlds: { allow: ["com", "net"] },
-    }),
-  providedCode: Joi.number(),
+  providedCode: Joi.number().required()
 });
+
 
 exports.changePasswordSchema = Joi.object({
   oldPassword: Joi.string()

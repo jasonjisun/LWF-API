@@ -367,11 +367,11 @@ exports.sendVerificationCode = async (req, res) => {
 
 exports.verifyVerificationCode = async (req, res) => {
   try {
-    const email = req.user.email; // Get email from authenticated user
-    const { providedCode, newPassword } = req.body;
+    const email = req.user.email;
+    const { providedCode } = req.body;
 
-    // Validate provided input (code and password)
-    const { error, value } = acceptCodeSchema.validate({ email: req.user.email, providedCode, newPassword });
+    // Validate provided code only
+    const { error } = acceptCodeSchema.validate({ providedCode });
     if (error) {
       await Log.create({
         action: 'VERIFICATION_FAILED_INVALID_INPUT',
@@ -380,12 +380,12 @@ exports.verifyVerificationCode = async (req, res) => {
         ip: req.ip,
         endpoint: req.originalUrl
       });
-      return res.status(401).json({ success: false, message: error.details[0].message });
+      return res.status(400).json({ success: false, message: error.details[0].message });
     }
 
     const codeValue = providedCode.toString();
     const existingUser = await User.findOne({ email }).select(
-      "+verificationCode +verificationCodeValidation +password"
+      "+verificationCode +verificationCodeValidation"
     );
 
     if (!existingUser) {
@@ -396,10 +396,9 @@ exports.verifyVerificationCode = async (req, res) => {
         ip: req.ip,
         endpoint: req.originalUrl
       });
-      return res.status(401).json({ success: false, message: "User does not exist!" });
+      return res.status(404).json({ success: false, message: "User does not exist!" });
     }
 
-    // Check if already verified
     if (existingUser.verified) {
       await Log.create({
         action: 'VERIFICATION_SKIPPED_ALREADY_VERIFIED',
@@ -411,7 +410,6 @@ exports.verifyVerificationCode = async (req, res) => {
       return res.status(400).json({ success: false, message: "You are already verified!" });
     }
 
-    // Check if verification code exists and is still valid
     if (!existingUser.verificationCode || !existingUser.verificationCodeValidation) {
       await Log.create({
         action: 'VERIFICATION_FAILED_INVALID_CODE',
@@ -423,7 +421,6 @@ exports.verifyVerificationCode = async (req, res) => {
       return res.status(400).json({ success: false, message: "Something is wrong with the code!" });
     }
 
-    // Check if the code has expired
     if (Date.now() - existingUser.verificationCodeValidation > 5 * 60 * 1000) {
       await Log.create({
         action: 'VERIFICATION_FAILED_CODE_EXPIRED',
@@ -435,24 +432,16 @@ exports.verifyVerificationCode = async (req, res) => {
       return res.status(400).json({ success: false, message: "Code has expired!" });
     }
 
-    // Hash the provided verification code to compare with stored value
     const hashedCodeValue = hmacProcess(
       codeValue,
       process.env.HMAC_VERIFICATION_CODE_SECRET
     );
 
-    // If the verification code is correct
     if (hashedCodeValue === existingUser.verificationCode) {
-      // Proceed to update password and mark user as verified
       existingUser.verified = true;
       existingUser.verificationCode = undefined;
       existingUser.verificationCodeValidation = undefined;
 
-      // Hash the new password
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-      existingUser.password = hashedPassword;
-      
-      // Save the user with the new password
       await existingUser.save();
 
       await Log.create({
@@ -463,10 +452,9 @@ exports.verifyVerificationCode = async (req, res) => {
         endpoint: req.originalUrl
       });
 
-      return res.status(200).json({ success: true, message: "Your account has been verified and password updated!" });
+      return res.status(200).json({ success: true, message: "Your account has been verified!" });
     }
 
-    // If the verification code is incorrect
     await Log.create({
       action: 'VERIFICATION_FAILED_INVALID_CODE',
       email,
@@ -474,10 +462,10 @@ exports.verifyVerificationCode = async (req, res) => {
       ip: req.ip,
       endpoint: req.originalUrl
     });
-    
+
     return res.status(400).json({ success: false, message: "Invalid code!" });
   } catch (error) {
-    console.log(error);
+    console.error(error);
 
     await Log.create({
       action: 'VERIFICATION_CODE_ERROR',
@@ -490,6 +478,7 @@ exports.verifyVerificationCode = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
 
 exports.changePassword = async (req, res) => {
   // Destructure the userId and verified correctly from req.user
