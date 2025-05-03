@@ -25,11 +25,9 @@ const app = express();
 // 🔒 Security Middleware
 app.use(helmet());
 app.use(
-  cors({
-    origin: "https://appointment-lwf-queue.onrender.com", // Change this to match your frontend URL
-    credentials: true, // Allow cookies/session sharing
-  })
+  cors()
 );
+
 app.use(cookieParser());
 
 // 🛠 Express Middleware
