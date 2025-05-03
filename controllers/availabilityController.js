@@ -2,7 +2,7 @@ const Availability = require('../models/availabilityModel');
 const DoctorProfile = require('../models/doctorProfileModel');
 const Log = require('../models/logsModel');
 
-// SET Availability (No changes needed)
+// SET Availability (Improved: Prevent duplicate time slots)
 exports.setAvailability = async (req, res) => {
   const doctorId = req.user?._id;
   const { date, timeSlots, status = "available" } = req.body;
@@ -23,7 +23,9 @@ exports.setAvailability = async (req, res) => {
     }
 
     const normalizedDate = new Date(date).toISOString().split("T")[0];
-    const normalizedSlots = timeSlots.map((slot) => slot.trim());
+
+    // Normalize and deduplicate time slots
+    const normalizedSlots = [...new Set(timeSlots.map(slot => slot.trim().toLowerCase()))];
 
     let availability = await Availability.findOne({
       doctor: doctorId,
@@ -35,9 +37,8 @@ exports.setAvailability = async (req, res) => {
         availability.timeSlots = normalizedSlots;
         availability.status = "unavailable";
       } else {
-        const mergedSlots = Array.from(
-          new Set([...availability.timeSlots, ...normalizedSlots])
-        );
+        const existingSlots = availability.timeSlots.map(slot => slot.trim().toLowerCase());
+        const mergedSlots = [...new Set([...existingSlots, ...normalizedSlots])];
         availability.timeSlots = mergedSlots;
         availability.status = "available";
       }
@@ -98,6 +99,7 @@ exports.setAvailability = async (req, res) => {
   }
 };
 
+
 exports.updateAvailabilityStatus = async (req, res) => {
   try {
     const { id } = req.params; // The availability ID
@@ -131,180 +133,73 @@ exports.updateAvailabilityStatus = async (req, res) => {
 // DELETE a specific time slot
 exports.deleteAvailability = async (req, res) => {
   try {
-    const doctorId = req.user._id; // Logged-in user's doctorId
-    const { availabilityId } = req.params; // availabilityId from URL
-    const { date, timeSlots } = req.body;  // Date and timeSlot from body
-
-    // Ensure both date and timeSlot are provided
-    if (!date || !timeSlots) {
-      // Log missing fields error
-      await Log.create({
-        action: 'DELETE_AVAILABILITY_FAILED',
-        email: req.user ? req.user.email : 'unknown',
-        role: req.user ? req.user.role : 'unknown',
-        ip: req.ip,
-        endpoint: req.originalUrl,
-        doctorId: doctorId,
-        message: 'Date and timeSlot are required.',
-        details: { date, timeSlots },
-      });
-
-      return res.status(400).json({ message: "date and timeSlot are required." });
-    }
-
-    // Normalize date to ISO format
-    const normalizedDate = new Date(date).toISOString().split("T")[0];
+    const doctorId = req.user._id;
+    const { availabilityId } = req.params;
 
     // Find the availability by ID
     const availability = await Availability.findById(availabilityId);
 
-    // If availability not found, return an error
     if (!availability) {
-      // Log availability not found error
       await Log.create({
         action: 'DELETE_AVAILABILITY_FAILED',
-        email: req.user ? req.user.email : 'unknown',
-        role: req.user ? req.user.role : 'unknown',
+        email: req.user?.email || 'unknown',
+        role: req.user?.role || 'unknown',
         ip: req.ip,
         endpoint: req.originalUrl,
-        doctorId: doctorId,
+        doctorId,
         message: 'Availability not found.',
-        availabilityId: availabilityId,
+        availabilityId,
       });
 
       return res.status(404).json({ message: "Availability not found." });
     }
 
-    // Check if the logged-in user is either the doctor who owns this availability or an admin
+    // Check permissions: doctor owns it or admin
     if (availability.doctor.toString() !== doctorId.toString() && req.user.role !== 'admin') {
-      // Log unauthorized access attempt
       await Log.create({
         action: 'DELETE_AVAILABILITY_FAILED',
-        email: req.user ? req.user.email : 'unknown',
-        role: req.user ? req.user.role : 'unknown',
+        email: req.user?.email || 'unknown',
+        role: req.user?.role || 'unknown',
         ip: req.ip,
         endpoint: req.originalUrl,
-        doctorId: doctorId,
-        message: 'Unauthorized attempt to delete availability.',
-        availabilityId: availabilityId,
+        doctorId,
+        message: 'Unauthorized delete attempt.',
+        availabilityId,
       });
 
       return res.status(403).json({ message: "You are not authorized to delete this availability." });
     }
 
-    // If doctor, ensure the availability is for their own date (if needed)
-    if (availability.doctor.toString() === doctorId.toString()) {
-      // Remove the specific timeSlot from the availability
-      const updatedAvailability = await Availability.findByIdAndUpdate(
-        availabilityId,
-        { $pull: { timeSlots: timeSlots } },
-        { new: true }
-      );
+    // Delete the entire availability
+    await Availability.findByIdAndDelete(availabilityId);
 
-      // Check if after removal, the timeSlots array is empty and delete the availability if necessary
-      if (updatedAvailability.timeSlots.length === 0) {
-        await Availability.findByIdAndDelete(availabilityId);
+    await Log.create({
+      action: 'AVAILABILITY_DELETED',
+      email: req.user?.email || 'unknown',
+      role: req.user?.role || 'unknown',
+      ip: req.ip,
+      endpoint: req.originalUrl,
+      doctorId,
+      message: 'Availability deleted successfully.',
+      availabilityId,
+    });
 
-        // Log successful deletion
-        await Log.create({
-          action: 'AVAILABILITY_DELETED',
-          email: req.user ? req.user.email : 'unknown',
-          role: req.user ? req.user.role : 'unknown',
-          ip: req.ip,
-          endpoint: req.originalUrl,
-          doctorId: doctorId,
-          message: 'Availability deleted successfully.',
-          availabilityId: availabilityId,
-        });
-
-        return res.status(200).json({
-          message: "Availability deleted successfully.",
-        });
-      }
-
-      // Log successful time slot deletion
-      await Log.create({
-        action: 'TIME_SLOT_DELETED',
-        email: req.user ? req.user.email : 'unknown',
-        role: req.user ? req.user.role : 'unknown',
-        ip: req.ip,
-        endpoint: req.originalUrl,
-        doctorId: doctorId,
-        message: 'Time slot deleted successfully.',
-        availabilityId: availabilityId,
-        timeSlots: updatedAvailability.timeSlots,
-      });
-
-      return res.status(200).json({
-        message: "Time slot deleted successfully.",
-        availability: updatedAvailability,
-      });
-    }
-
-    // Admin can delete any availability
-    if (req.user.role === 'admin') {
-      const updatedAvailability = await Availability.findByIdAndUpdate(
-        availabilityId,
-        { $pull: { timeSlots: timeSlots } },
-        { new: true }
-      );
-
-      // Check if after removal, the timeSlots array is empty and delete the availability if necessary
-      if (updatedAvailability.timeSlots.length === 0) {
-        await Availability.findByIdAndDelete(availabilityId);
-
-        // Log successful deletion by admin
-        await Log.create({
-          action: 'AVAILABILITY_DELETED',
-          email: req.user ? req.user.email : 'unknown',
-          role: req.user ? req.user.role : 'unknown',
-          ip: req.ip,
-          endpoint: req.originalUrl,
-          doctorId: doctorId,
-          message: 'Availability deleted by admin successfully.',
-          availabilityId: availabilityId,
-        });
-
-        return res.status(200).json({
-          message: "Availability deleted successfully.",
-        });
-      }
-
-      // Log successful time slot deletion by admin
-      await Log.create({
-        action: 'TIME_SLOT_DELETED',
-        email: req.user ? req.user.email : 'unknown',
-        role: req.user ? req.user.role : 'unknown',
-        ip: req.ip,
-        endpoint: req.originalUrl,
-        doctorId: doctorId,
-        message: 'Time slot deleted by admin successfully.',
-        availabilityId: availabilityId,
-        timeSlots: updatedAvailability.timeSlots,
-      });
-
-      return res.status(200).json({
-        message: "Time slot deleted successfully.",
-        availability: updatedAvailability,
-      });
-    }
-
-    // If none of the conditions are met, return an unauthorized message
-    return res.status(403).json({ message: "You are not authorized to perform this action." });
+    return res.status(200).json({
+      message: "Availability deleted successfully.",
+    });
 
   } catch (error) {
     console.error("Error deleting availability:", error);
 
-    // Log error during deletion
     await Log.create({
       action: 'AVAILABILITY_DELETE_ERROR',
-      email: req.user ? req.user.email : 'unknown',
-      role: req.user ? req.user.role : 'unknown',
+      email: req.user?.email || 'unknown',
+      role: req.user?.role || 'unknown',
       ip: req.ip,
       endpoint: req.originalUrl,
-      doctorId: doctorId,
+      doctorId,
       message: 'Error deleting availability.',
-      error: error.message, // Include the error message for debugging
+      error: error.message,
     });
 
     return res.status(500).json({ message: "Internal server error." });
