@@ -11,7 +11,7 @@ const {
 const router = express.Router();
 
 // 🧑‍⚕️ Doctor/Admin: Get all EMRs
-router.get("/get-all", verifyJWT(["admin"]), getAllPatientEMR);
+router.get("/get-all", verifyJWT(["admin","doctor"]), getAllPatientEMR);
 
 // 👤 Patient: Get their own EMR
 router.get("/own", verifyJWT(["patient"]), getOwnEMR);
