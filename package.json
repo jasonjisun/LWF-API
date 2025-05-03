@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
-    "start": "node --env-file=.env server.js",
+    "start": "node server.js",
     "dev": "node --watch --trace-warnings --env-file=.env server.js"
   },
   "author": "JasonC",
