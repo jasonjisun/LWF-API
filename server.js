@@ -1,6 +1,6 @@
 require("dotenv").config();
 require("./middlewares/passport");
-
+const path = require("path");
 const express = require("express");
 const passport = require("passport");
 const session = require("express-session");
@@ -66,6 +66,11 @@ app.use('/api/admin', adminProfileRoutes);
 app.use('/api/patient', patientProfileRoutes);
 app.use('/api/queue', queueRoutes);
 app.use('/api/logs', logsRoutes);
+
+app.use(express.static(path.join(__dirname, "dist")));
+app.get("/*", (req, res) => {
+  res.sendFile(path.join(__dirname, "dist", "index.html"));
+});
 
 // 🎯 Base API Route
 app.get("/", (req, res) => {
