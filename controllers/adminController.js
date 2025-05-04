@@ -4,6 +4,7 @@ const PatientProfile = require("../models/patientProfileModel");
 const User = require("../models/usersModel");
 const Availability = require("../models/availabilityModel");
 const Log = require('../models/logsModel');
+const transport = require("../middlewares/sendMail");
 
 // Admin Dashboard Overview
 exports.getAdminDashboardData = async (req, res) => {
@@ -119,62 +120,74 @@ exports.confirmAppointment = async (req, res) => {
     const { appointmentId } = req.params;
 
     // Find the appointment by ID
-    const appointment = await Appointment.findById(appointmentId);
+    const appointment = await Appointment.findById(appointmentId).populate('patient');
     if (!appointment) {
-      // Log appointment not found
       await Log.create({
         action: 'APPOINTMENT_CONFIRM_FAILED',
-        email: req.user ? req.user.email : 'unknown', // Use the authenticated user's email
-        role: req.user ? req.user.role : 'unknown',
+        email: req.user?.email || 'unknown',
+        role: req.user?.role || 'unknown',
         ip: req.ip,
         endpoint: req.originalUrl,
-        appointmentId: appointmentId,
+        appointmentId,
         message: 'Appointment not found.',
       });
       return res.status(404).json({ message: "Appointment not found." });
     }
 
-    // If already confirmed, return early
     if (appointment.status === "confirmed") {
-      // Log already confirmed appointment
       await Log.create({
         action: 'APPOINTMENT_ALREADY_CONFIRMED',
-        email: req.user ? req.user.email : 'unknown', // Use the authenticated user's email
-        role: req.user ? req.user.role : 'unknown',
+        email: req.user?.email || 'unknown',
+        role: req.user?.role || 'unknown',
         ip: req.ip,
         endpoint: req.originalUrl,
-        appointmentId: appointmentId,
+        appointmentId,
         message: 'Appointment is already confirmed.',
       });
       return res.status(400).json({ message: "Appointment is already confirmed." });
     }
 
-    // Update the appointment status to 'confirmed'
+    // Update appointment status
     appointment.status = "confirmed";
     await appointment.save();
 
-    // Extract relevant fields
     const doctorId = appointment.doctor;
-    const date = appointment.scheduledDateTime.toISOString().split('T')[0]; // Get YYYY-MM-DD
+    const date = appointment.scheduledDateTime.toISOString().split('T')[0];
     const timeSlot = appointment.timeSlot;
 
-    // Update availability: remove the confirmed timeSlot for the doctor on that date
     await Availability.findOneAndUpdate(
       { doctor: doctorId, date },
       { $pull: { timeSlots: timeSlot } }
     );
 
-    // Log successful appointment confirmation
     await Log.create({
       action: 'APPOINTMENT_CONFIRMED',
-      email: req.user ? req.user.email : 'unknown', // Use the authenticated user's email
-      role: req.user ? req.user.role : 'unknown',
+      email: req.user?.email || 'unknown',
+      role: req.user?.role || 'unknown',
       ip: req.ip,
       endpoint: req.originalUrl,
-      appointmentId: appointmentId,
-      doctorId: doctorId,
+      appointmentId,
+      doctorId,
       message: 'Appointment confirmed and schedule updated.',
     });
+
+    // Send confirmation email
+    const patientEmail = appointment.patient?.email;
+    if (patientEmail) {
+      await transport.sendMail({
+        from: process.env.NODE_CODE_SENDING_EMAIL_ADDRESS,
+        to: patientEmail,
+        subject: "Appointment Confirmation",
+        html: `
+          <h3>Your Appointment is Confirmed</h3>
+          <p>Dear ${appointment.patient?.name || "Patient"},</p>
+          <p>Your appointment has been successfully confirmed.</p>
+          <p><strong>Date:</strong> ${date}</p>
+          <p><strong>Time:</strong> ${timeSlot}</p>
+          <p>Thank you!</p>
+        `
+      });
+    }
 
     res.status(200).json({
       message: "Appointment confirmed and schedule updated successfully.",
@@ -183,11 +196,10 @@ exports.confirmAppointment = async (req, res) => {
   } catch (error) {
     console.error("Error confirming appointment:", error);
 
-    // Log any error during appointment confirmation
     await Log.create({
       action: 'APPOINTMENT_CONFIRM_ERROR',
-      email: req.user ? req.user.email : 'unknown', // Use the authenticated user's email
-      role: req.user ? req.user.role : 'unknown',
+      email: req.user?.email || 'unknown',
+      role: req.user?.role || 'unknown',
       ip: req.ip,
       endpoint: req.originalUrl,
       appointmentId: req.params.appointmentId,
@@ -203,51 +215,64 @@ exports.cancelAppointment = async (req, res) => {
   try {
     const { appointmentId } = req.params;
 
-    // Find the appointment by ID
-    const appointment = await Appointment.findById(appointmentId);
+    // Find the appointment by ID and populate patient
+    const appointment = await Appointment.findById(appointmentId).populate('patient');
     if (!appointment) {
-      // Log when the appointment is not found
       await Log.create({
         action: 'APPOINTMENT_CANCEL_FAILED',
-        email: req.user ? req.user.email : 'unknown', // Use the authenticated user's email
-        role: req.user ? req.user.role : 'unknown',
+        email: req.user?.email || 'unknown',
+        role: req.user?.role || 'unknown',
         ip: req.ip,
         endpoint: req.originalUrl,
-        appointmentId: appointmentId,
+        appointmentId,
         message: 'Appointment not found.',
       });
       return res.status(404).json({ message: "Appointment not found." });
     }
 
-    // If already cancelled, no need to cancel again
     if (appointment.status === "cancelled") {
-      // Log if the appointment is already cancelled
       await Log.create({
         action: 'APPOINTMENT_ALREADY_CANCELLED',
-        email: req.user ? req.user.email : 'unknown', // Use the authenticated user's email
-        role: req.user ? req.user.role : 'unknown',
+        email: req.user?.email || 'unknown',
+        role: req.user?.role || 'unknown',
         ip: req.ip,
         endpoint: req.originalUrl,
-        appointmentId: appointmentId,
+        appointmentId,
         message: 'Appointment is already cancelled.',
       });
       return res.status(400).json({ message: "Appointment is already cancelled." });
     }
 
-    // Update the appointment status to 'cancelled'
+    // Cancel the appointment
     appointment.status = "cancelled";
     await appointment.save();
 
-    // Log successful appointment cancellation
     await Log.create({
       action: 'APPOINTMENT_CANCELLED',
-      email: req.user ? req.user.email : 'unknown', // Use the authenticated user's email
-      role: req.user ? req.user.role : 'unknown',
+      email: req.user?.email || 'unknown',
+      role: req.user?.role || 'unknown',
       ip: req.ip,
       endpoint: req.originalUrl,
-      appointmentId: appointmentId,
+      appointmentId,
       message: 'Appointment cancelled successfully.',
     });
+
+    // Send cancellation email
+    const patientEmail = appointment.patient?.email;
+    if (patientEmail) {
+      await transport.sendMail({
+        from: process.env.NODE_CODE_SENDING_EMAIL_ADDRESS,
+        to: patientEmail,
+        subject: "Appointment Cancelled",
+        html: `
+          <h3>Your Appointment Has Been Cancelled</h3>
+          <p>Dear ${appointment.patient?.name || "Patient"},</p>
+          <p>Your appointment has been cancelled.</p>
+          <p>Please contact us to rebook at your convenience.</p>
+          <p>Thank you!</p>
+        `
+      });
+    }
 
     res.status(200).json({
       message: "Appointment cancelled successfully.",
@@ -256,11 +281,10 @@ exports.cancelAppointment = async (req, res) => {
   } catch (error) {
     console.error("Error cancelling appointment:", error);
 
-    // Log any error that occurs during the cancellation process
     await Log.create({
       action: 'APPOINTMENT_CANCEL_ERROR',
-      email: req.user ? req.user.email : 'unknown', // Use the authenticated user's email
-      role: req.user ? req.user.role : 'unknown',
+      email: req.user?.email || 'unknown',
+      role: req.user?.role || 'unknown',
       ip: req.ip,
       endpoint: req.originalUrl,
       appointmentId: req.params.appointmentId,
@@ -272,65 +296,59 @@ exports.cancelAppointment = async (req, res) => {
   }
 };
 
+
 exports.rescheduleAppointment = async (req, res) => {
   try {
     const { appointmentId } = req.params;
     const { newScheduledDateTime } = req.body;
+    // ✅ Validate newScheduledDateTime early
+    if (!newScheduledDateTime || isNaN(new Date(newScheduledDateTime).getTime())) {
+      return res.status(400).json({ message: "Invalid newScheduledDateTime." });
+    }
 
-    // Find the appointment by ID
-    const appointment = await Appointment.findById(appointmentId);
+    const appointment = await Appointment.findById(appointmentId).populate('patient');
     if (!appointment) {
-      // Log when appointment is not found
       await Log.create({
         action: 'APPOINTMENT_RESCHEDULE_FAILED',
-        email: req.user ? req.user.email : 'unknown', // Use the authenticated user's email
-        role: req.user ? req.user.role : 'unknown',
+        email: req.user?.email || 'unknown',
+        role: req.user?.role || 'unknown',
         ip: req.ip,
         endpoint: req.originalUrl,
-        appointmentId: appointmentId,
+        appointmentId,
         message: 'Appointment not found.',
       });
       return res.status(404).json({ message: "Appointment not found." });
     }
 
-    // Prevent rescheduling if the appointment is cancelled
     if (appointment.status === "cancelled") {
-      // Log when appointment is cancelled and can't be rescheduled
       await Log.create({
         action: 'APPOINTMENT_ALREADY_CANCELLED',
-        email: req.user ? req.user.email : 'unknown',
-        role: req.user ? req.user.role : 'unknown',
+        email: req.user?.email || 'unknown',
+        role: req.user?.role || 'unknown',
         ip: req.ip,
         endpoint: req.originalUrl,
-        appointmentId: appointmentId,
+        appointmentId,
         message: 'Cannot reschedule a cancelled appointment.',
       });
-      return res
-        .status(400)
-        .json({ message: "Cannot reschedule a cancelled appointment." });
+      return res.status(400).json({ message: "Cannot reschedule a cancelled appointment." });
     }
 
-    // Ensure doctors only reschedule their own appointments
     if (
       req.user.role === "doctor" &&
       appointment.doctor.toString() !== req.user._id.toString()
     ) {
-      // Log if doctor is trying to reschedule another doctor's appointment
       await Log.create({
         action: 'APPOINTMENT_RESCHEDULE_PERMISSION_DENIED',
-        email: req.user ? req.user.email : 'unknown',
-        role: req.user ? req.user.role : 'unknown',
+        email: req.user?.email || 'unknown',
+        role: req.user?.role || 'unknown',
         ip: req.ip,
         endpoint: req.originalUrl,
-        appointmentId: appointmentId,
+        appointmentId,
         message: 'You can only reschedule your own appointments.',
       });
-      return res
-        .status(403)
-        .json({ message: "You can only reschedule your own appointments." });
+      return res.status(403).json({ message: "You can only reschedule your own appointments." });
     }
 
-    // Check if the new time is already booked by another appointment for the same doctor
     const conflict = await Appointment.findOne({
       doctor: appointment.doctor,
       scheduledDateTime: newScheduledDateTime,
@@ -339,34 +357,52 @@ exports.rescheduleAppointment = async (req, res) => {
     });
 
     if (conflict) {
-      // Log if there's a conflict with the new scheduled time
       await Log.create({
         action: 'APPOINTMENT_RESCHEDULE_TIME_CONFLICT',
-        email: req.user ? req.user.email : 'unknown',
-        role: req.user ? req.user.role : 'unknown',
+        email: req.user?.email || 'unknown',
+        role: req.user?.role || 'unknown',
         ip: req.ip,
         endpoint: req.originalUrl,
-        appointmentId: appointmentId,
+        appointmentId,
         message: 'Time slot already booked.',
       });
       return res.status(400).json({ message: "Time slot already booked." });
     }
 
-    // Update the appointment's scheduled time and mark it as rescheduled
     appointment.scheduledDateTime = newScheduledDateTime;
-    appointment.status = "rescheduled"; // <- Set to rescheduled
+    appointment.status = "rescheduled";
     await appointment.save();
 
-    // Log successful rescheduling
     await Log.create({
       action: 'APPOINTMENT_RESCHEDULED',
-      email: req.user ? req.user.email : 'unknown',
-      role: req.user ? req.user.role : 'unknown',
+      email: req.user?.email || 'unknown',
+      role: req.user?.role || 'unknown',
       ip: req.ip,
       endpoint: req.originalUrl,
       appointmentId: appointment._id,
       message: 'Appointment rescheduled successfully.',
     });
+
+    // Send reschedule confirmation email
+    const patientEmail = appointment.patient?.email;
+    const rescheduleDate = new Date(newScheduledDateTime).toISOString().split("T")[0];
+    const rescheduleTime = new Date(newScheduledDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    if (patientEmail) {
+      await transport.sendMail({
+        from: process.env.NODE_CODE_SENDING_EMAIL_ADDRESS,
+        to: patientEmail,
+        subject: "Appointment Rescheduled",
+        html: `
+          <h3>Your Appointment Has Been Rescheduled</h3>
+          <p>Dear ${appointment.patient?.name || "Patient"},</p>
+          <p>Your appointment has been successfully rescheduled.</p>
+          <p><strong>New Date:</strong> ${rescheduleDate}</p>
+          <p><strong>New Time:</strong> ${rescheduleTime}</p>
+          <p>If this wasn't you, please contact us immediately.</p>
+        `,
+      });
+    }
 
     res.status(200).json({
       message: "Appointment rescheduled successfully.",
@@ -380,11 +416,10 @@ exports.rescheduleAppointment = async (req, res) => {
   } catch (error) {
     console.error("Error rescheduling appointment:", error);
 
-    // Log error during the rescheduling process
     await Log.create({
       action: 'APPOINTMENT_RESCHEDULE_ERROR',
-      email: req.user ? req.user.email : 'unknown',
-      role: req.user ? req.user.role : 'unknown',
+      email: req.user?.email || 'unknown',
+      role: req.user?.role || 'unknown',
       ip: req.ip,
       endpoint: req.originalUrl,
       appointmentId: req.params.appointmentId,
