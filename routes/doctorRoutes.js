@@ -31,7 +31,7 @@ router.get('/my-availability', verifyJWT(['doctor', 'admin']), availabilityContr
 router.post('/reschedule-appointment/:appointmentId', verifyJWT, doctorController.rescheduleAppointment);
 
 // Create a doctor profile (only doctors)
-router.post("/profile", verifyJWT(["doctor"]), doctorController.createDoctorProfile);
+router.post("/create-profile/:doctorId", verifyJWT(["doctor"]), doctorController.createDoctorProfile);
 
 // Get a doctor's profile (accessible to doctor, patient, admin)
 router.get("/profile/:doctorId", verifyJWT(["doctor", "patient", "admin"]), doctorController.getDoctorProfile);
