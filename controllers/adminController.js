@@ -7,31 +7,6 @@ const Log = require('../models/logsModel');
 const transport = require("../middlewares/sendMail");
 
 // Admin Dashboard Overview
-exports.getAdminDashboardData = async (req, res) => {
-  try {
-    const today = new Date();
-
-    const todayAppointments = await Appointment.countDocuments({
-      scheduledDateTime: { $gte: today },
-    });
-    const totalPatients = await User.countDocuments({ role: "patient" });
-    const sessionsToday = await Appointment.countDocuments({
-      sessionDate: { $gte: today },
-    });
-    const pendingReports = await Appointment.countDocuments({
-      reportStatus: "pending",
-    });
-
-    res.json({
-      todayAppointments,
-      totalPatients,
-      sessionsToday,
-      pendingReports,
-    });
-  } catch (error) {
-    res.status(500).json({ message: "Error fetching admin dashboard data" });
-  }
-};
 
 exports.getAllAppointmentsForAdmin = async (req, res) => {
   try {
@@ -112,7 +87,6 @@ exports.getAllAppointmentsForAdmin = async (req, res) => {
     res.status(500).json({ message: "Error retrieving appointments." });
   }
 };
-
 
 // Confirm the appointment
 exports.confirmAppointment = async (req, res) => {
@@ -214,8 +188,13 @@ exports.confirmAppointment = async (req, res) => {
 exports.cancelAppointment = async (req, res) => {
   try {
     const { appointmentId } = req.params;
+    const { message } = req.body; // The cancellation reason/message provided
 
-    // Find the appointment by ID and populate patient
+    if (!message || message.trim() === "") {
+      return res.status(400).json({ message: "Cancellation message is required." });
+    }
+
+    // Find the appointment by ID and populate patient details
     const appointment = await Appointment.findById(appointmentId).populate('patient');
     if (!appointment) {
       await Log.create({
@@ -230,6 +209,7 @@ exports.cancelAppointment = async (req, res) => {
       return res.status(404).json({ message: "Appointment not found." });
     }
 
+    // Check if appointment is already cancelled
     if (appointment.status === "cancelled") {
       await Log.create({
         action: 'APPOINTMENT_ALREADY_CANCELLED',
@@ -243,10 +223,21 @@ exports.cancelAppointment = async (req, res) => {
       return res.status(400).json({ message: "Appointment is already cancelled." });
     }
 
-    // Cancel the appointment
+    // Determine who is cancelling the appointment
+    const cancellationBy = req.user?.role === 'admin' ? 'admin' : req.user?.role;
+
+    // Set cancellation details
     appointment.status = "cancelled";
+    appointment.cancellation = {
+      by: cancellationBy,
+      reason: message,
+      date: new Date(),
+    };
+
+    // Save the appointment with updated cancellation details
     await appointment.save();
 
+    // Log the cancellation action
     await Log.create({
       action: 'APPOINTMENT_CANCELLED',
       email: req.user?.email || 'unknown',
@@ -254,10 +245,10 @@ exports.cancelAppointment = async (req, res) => {
       ip: req.ip,
       endpoint: req.originalUrl,
       appointmentId,
-      message: 'Appointment cancelled successfully.',
+      message: `Appointment cancelled. Reason: ${message}`,
     });
 
-    // Send cancellation email
+    // Send cancellation email to the patient
     const patientEmail = appointment.patient?.email;
     if (patientEmail) {
       await transport.sendMail({
@@ -267,8 +258,8 @@ exports.cancelAppointment = async (req, res) => {
         html: `
           <h3>Your Appointment Has Been Cancelled</h3>
           <p>Dear ${appointment.patient?.name || "Patient"},</p>
-          <p>Your appointment has been cancelled.</p>
-          <p>Please contact us to rebook at your convenience.</p>
+          <p>We regret to inform you that your appointment has been cancelled. Reason: ${message}</p>
+          <p>If you have any questions or wish to reschedule, please contact us.</p>
           <p>Thank you!</p>
         `
       });
@@ -276,11 +267,13 @@ exports.cancelAppointment = async (req, res) => {
 
     res.status(200).json({
       message: "Appointment cancelled successfully.",
+      cancellationMessage: message,
       appointment,
     });
   } catch (error) {
     console.error("Error cancelling appointment:", error);
 
+    // Log the error if cancelling fails
     await Log.create({
       action: 'APPOINTMENT_CANCEL_ERROR',
       email: req.user?.email || 'unknown',

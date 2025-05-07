@@ -6,20 +6,6 @@ const User = require('../models/usersModel'); // Added for getAvailableDoctors
 const PatientProfile = require('../models/patientProfileModel'); // Added for getAvailableDoctors
 const Log = require('../models/logsModel');
 
-// Get patient dashboard data
-exports.getPatientDashboardData = async (req, res) => {
-  try {
-    const appointments = await Appointment.find({ patientId: req.user._id });
-    const upcomingAppointments = appointments.filter(
-      (appt) => new Date(appt.scheduledDateTime) > new Date()
-    );
-
-    res.json({ upcomingAppointments });
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching patient dashboard data' });
-  }
-};
-
 exports.getAllDoctorsWithProfiles = async (req, res) => {
   try {
     const doctors = await DoctorProfile.find()
@@ -284,6 +270,47 @@ exports.bookAppointment = async (req, res) => {
     res.status(500).json({ message: "Error booking appointment." });
   }
 };
+
+exports.cancelAppointment = async (req, res) => {
+  try {
+    const { appointmentId } = req.params;
+    const { message } = req.body;
+
+    if (!message || message.trim() === "") {
+      return res.status(400).json({ message: "Cancellation reason is required." });
+    }
+
+    const appointment = await Appointment.findById(appointmentId).populate('patient');
+    if (!appointment) {
+      // Logging omitted for brevity
+      return res.status(404).json({ message: "Appointment not found." });
+    }
+
+    if (appointment.status === "cancelled") {
+      return res.status(400).json({ message: "Appointment is already cancelled." });
+    }
+
+    appointment.status = "cancelled";
+    appointment.cancellation = {
+      by: "patient",
+      reason: message, // ← make sure this uses the actual variable name
+      date: new Date(),
+    };
+
+    await appointment.save();
+
+    res.status(200).json({
+      message: "Appointment has been cancelled.",
+      cancellationReason: message,
+      appointment,
+    });
+  } catch (error) {
+    console.error("Error cancelling appointment:", error);
+    res.status(500).json({ message: "Error cancelling appointment." });
+  }
+};
+
+
 
 exports.getMyAppointmentStatus = async (req, res) => {
   try {
