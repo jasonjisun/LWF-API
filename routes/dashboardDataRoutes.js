@@ -5,6 +5,7 @@ const {
   getRescheduledAppointments,
   getCancelledAppointments,
   getAppointmentsByFilter,
+  getAppointmentsByMonth,
 } = require("../controllers/dashboardDataController");
 const verifyJWT = require("../middlewares/verifyJWT");
 
@@ -16,5 +17,6 @@ router.get(
 );
 router.get("/appointments/cancelled", verifyJWT(), getCancelledAppointments);
 router.get("/appointments", verifyJWT(["admin", "doctor"]), getAppointmentsByFilter);
+router.get("/by-month",verifyJWT(), getAppointmentsByMonth);
 
 module.exports = router;

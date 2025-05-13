@@ -48,6 +48,48 @@ exports.getAppointmentsByFilter = async (req, res) => {
   }
 };
 
+exports.getAppointmentsByMonth = async (req, res) => {
+  try {
+    const { month, year } = req.query;
+
+    // Validate month and year
+    if (!month || !year) {
+      return res.status(400).json({ message: "Please provide both 'month' and 'year'." });
+    }
+
+    // Create moment object for the provided month and year
+    const targetDate = moment(`${year}-${month}`, "YYYY-M");
+
+    if (!targetDate.isValid()) {
+      return res.status(400).json({ message: "Invalid month or year format." });
+    }
+
+    const startDate = targetDate.startOf("month").toDate();
+    const endDate = targetDate.endOf("month").toDate();
+
+    // Query appointments within the month
+    const appointments = await Appointment.find({
+      scheduledDateTime: {
+        $gte: startDate,
+        $lte: endDate,
+      },
+    })
+      .populate("patient", "fullName email contactNumber")
+      .populate("doctor", "fullName email")
+      .sort({ scheduledDateTime: 1 });
+
+    res.status(200).json({
+      month: targetDate.format("MMMM"),
+      year,
+      count: appointments.length,
+      appointments,
+    });
+  } catch (error) {
+    console.error("Error fetching appointments by month:", error);
+    res.status(500).json({ message: "Server error while fetching appointments." });
+  }
+};
+
 // Get Confirmed Appointments
 exports.getConfirmedAppointments = async (req, res) => {
   try {
