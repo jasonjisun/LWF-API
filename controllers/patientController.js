@@ -282,7 +282,6 @@ exports.cancelAppointment = async (req, res) => {
 
     const appointment = await Appointment.findById(appointmentId).populate('patient');
     if (!appointment) {
-      // Logging omitted for brevity
       return res.status(404).json({ message: "Appointment not found." });
     }
 
@@ -293,7 +292,7 @@ exports.cancelAppointment = async (req, res) => {
     appointment.status = "cancelled";
     appointment.cancellation = {
       by: "patient",
-      reason: message, // ← make sure this uses the actual variable name
+      reason: message, // The cancellation message is stored here
       date: new Date(),
     };
 
@@ -310,8 +309,6 @@ exports.cancelAppointment = async (req, res) => {
   }
 };
 
-
-
 exports.getMyAppointmentStatus = async (req, res) => {
   try {
     const appointments = await Appointment.find({ patient: req.user._id }).lean();
@@ -320,18 +317,32 @@ exports.getMyAppointmentStatus = async (req, res) => {
       return res.status(404).json({ message: 'No appointments found for this patient.' });
     }
 
-    // Step 1: Get doctor IDs from appointments
-    const doctorIds = [...new Set(appointments.map(appt => appt.doctor.toString()))];
+    const doctorIds = [...new Set(appointments.map(appt => appt.doctor?.toString()))];
 
-    // Step 2: Get doctor profiles where 'doctor' matches those IDs
     const profiles = await DoctorProfile.find({ doctor: { $in: doctorIds } }).lean();
 
-    // Step 3: Map doctor user IDs to full names
-    const doctorMap = new Map(profiles.map(profile => [profile.doctor.toString(), profile.fullName]));
+    const doctorMap = new Map(
+      profiles.map(profile => [profile.doctor.toString(), profile.fullName || 'Doctor not found'])
+    );
 
-    // Step 4: Format appointment response
     const appointmentStatus = appointments.map(appt => {
-      const doctorName = doctorMap.get(appt.doctor.toString()) || 'Doctor not found';
+      const doctorName = doctorMap.get(appt.doctor?.toString()) || 'Doctor not found';
+      const isCancelled = appt.status === 'cancelled';
+      const cancellation = appt.cancellation || {};
+
+      let cancellationDetails = null;
+
+      if (isCancelled) {
+        const by = cancellation.by;
+        const isByPatient = by === 'patient';
+        const isByAdmin = by === 'admin';
+
+        cancellationDetails = {
+          cancelledBy: isByPatient ? 'You' : isByAdmin ? 'Admin' : 'Unknown',
+          reasonForCancellation: cancellation.reason || 'Not provided',
+          cancelledOn: cancellation.date || null,
+        };
+      }
 
       return {
         appointmentId: appt._id,
@@ -341,6 +352,7 @@ exports.getMyAppointmentStatus = async (req, res) => {
         status: appt.status,
         reason: appt.reason,
         timeSlot: appt.timeSlot,
+        ...(cancellationDetails && { cancellationDetails }),
       };
     });
 

@@ -14,27 +14,24 @@ exports.getAllAppointmentsForAdmin = async (req, res) => {
     const filter = status ? { status } : {};
 
     const appointments = await Appointment.find(filter)
-      .populate("patient", "fullName email") // Removed contactNumber (not in User schema)
+      .populate("patient", "fullName email")
       .lean();
 
     if (!appointments.length) {
       return res.status(404).json({ message: "No appointments found." });
     }
 
-    const doctorIds = [
-      ...new Set(appointments.map((a) => a.doctor?.toString())),
-    ];
-    const patientUserIds = [
-      ...new Set(appointments.map((a) => a.patient?._id?.toString())),
-    ];
+    const doctorIds = [...new Set(appointments.map((a) => a.doctor?.toString()))];
+    const patientUserIds = [...new Set(appointments.map((a) => a.patient?._id?.toString()))];
 
-    // Get doctor profiles
-    const profiles = await DoctorProfile.find({ doctor: { $in: doctorIds } })
+    const doctorProfiles = await DoctorProfile.find({ doctor: { $in: doctorIds } })
       .populate("doctor", "email")
       .lean();
 
+    const patientProfiles = await PatientProfile.find({ user: { $in: patientUserIds } }).lean();
+
     const doctorMap = Object.fromEntries(
-      profiles.map((p) => [
+      doctorProfiles.map((p) => [
         p.doctor._id.toString(),
         {
           name: p.fullName || "Unknown",
@@ -42,11 +39,6 @@ exports.getAllAppointmentsForAdmin = async (req, res) => {
         },
       ])
     );
-
-    // Get patient profiles
-    const patientProfiles = await PatientProfile.find({
-      user: { $in: patientUserIds },
-    }).lean();
 
     const patientMap = Object.fromEntries(
       patientProfiles.map((p) => [
@@ -61,6 +53,8 @@ exports.getAllAppointmentsForAdmin = async (req, res) => {
     const result = appointments.map((appt) => {
       const patientId = appt.patient?._id?.toString();
       const patientInfo = patientMap[patientId] || {};
+      const doctorInfo = doctorMap[appt.doctor?.toString()] || {};
+      const cancellation = appt.cancellation || {};
 
       return {
         appointmentId: appt._id,
@@ -71,13 +65,19 @@ exports.getAllAppointmentsForAdmin = async (req, res) => {
           contactNumber: patientInfo.contact || null,
         },
         doctorId: appt.doctor,
-        doctorName:
-          doctorMap[appt.doctor?.toString()]?.name || "Doctor not found",
-        doctorEmail: doctorMap[appt.doctor?.toString()]?.email || null,
+        doctorName: doctorInfo.name || "Doctor not found",
+        doctorEmail: doctorInfo.email || null,
         scheduledDateTime: appt.scheduledDateTime,
-        status: appt.status,
-        reason: appt.reason,
         timeSlot: appt.timeSlot,
+        status: appt.status,
+        reason: appt.reason || null,
+        ...(appt.status === "cancelled" && {
+          cancellation: {
+            by: cancellation.by ?? "not specified",
+            reason: cancellation.reason ?? "not provided",
+            date: cancellation.date ?? null,
+          },
+        }),
       };
     });
 
@@ -87,6 +87,7 @@ exports.getAllAppointmentsForAdmin = async (req, res) => {
     res.status(500).json({ message: "Error retrieving appointments." });
   }
 };
+
 
 // Confirm the appointment
 exports.confirmAppointment = async (req, res) => {
@@ -288,7 +289,6 @@ exports.cancelAppointment = async (req, res) => {
     res.status(500).json({ message: "Error cancelling appointment." });
   }
 };
-
 
 exports.rescheduleAppointment = async (req, res) => {
   try {
