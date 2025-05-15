@@ -6,20 +6,6 @@ const User = require('../models/usersModel'); // Added for getAvailableDoctors
 const PatientProfile = require('../models/patientProfileModel'); // Added for getAvailableDoctors
 const Log = require('../models/logsModel');
 
-// Get patient dashboard data
-exports.getPatientDashboardData = async (req, res) => {
-  try {
-    const appointments = await Appointment.find({ patientId: req.user._id });
-    const upcomingAppointments = appointments.filter(
-      (appt) => new Date(appt.scheduledDateTime) > new Date()
-    );
-
-    res.json({ upcomingAppointments });
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching patient dashboard data' });
-  }
-};
-
 exports.getAllDoctorsWithProfiles = async (req, res) => {
   try {
     const doctors = await DoctorProfile.find()
@@ -285,6 +271,44 @@ exports.bookAppointment = async (req, res) => {
   }
 };
 
+exports.cancelAppointment = async (req, res) => {
+  try {
+    const { appointmentId } = req.params;
+    const { message } = req.body;
+
+    if (!message || message.trim() === "") {
+      return res.status(400).json({ message: "Cancellation reason is required." });
+    }
+
+    const appointment = await Appointment.findById(appointmentId).populate('patient');
+    if (!appointment) {
+      return res.status(404).json({ message: "Appointment not found." });
+    }
+
+    if (appointment.status === "cancelled") {
+      return res.status(400).json({ message: "Appointment is already cancelled." });
+    }
+
+    appointment.status = "cancelled";
+    appointment.cancellation = {
+      by: "patient",
+      reason: message, // The cancellation message is stored here
+      date: new Date(),
+    };
+
+    await appointment.save();
+
+    res.status(200).json({
+      message: "Appointment has been cancelled.",
+      cancellationReason: message,
+      appointment,
+    });
+  } catch (error) {
+    console.error("Error cancelling appointment:", error);
+    res.status(500).json({ message: "Error cancelling appointment." });
+  }
+};
+
 exports.getMyAppointmentStatus = async (req, res) => {
   try {
     const appointments = await Appointment.find({ patient: req.user._id }).lean();
@@ -293,18 +317,32 @@ exports.getMyAppointmentStatus = async (req, res) => {
       return res.status(404).json({ message: 'No appointments found for this patient.' });
     }
 
-    // Step 1: Get doctor IDs from appointments
-    const doctorIds = [...new Set(appointments.map(appt => appt.doctor.toString()))];
+    const doctorIds = [...new Set(appointments.map(appt => appt.doctor?.toString()))];
 
-    // Step 2: Get doctor profiles where 'doctor' matches those IDs
     const profiles = await DoctorProfile.find({ doctor: { $in: doctorIds } }).lean();
 
-    // Step 3: Map doctor user IDs to full names
-    const doctorMap = new Map(profiles.map(profile => [profile.doctor.toString(), profile.fullName]));
+    const doctorMap = new Map(
+      profiles.map(profile => [profile.doctor.toString(), profile.fullName || 'Doctor not found'])
+    );
 
-    // Step 4: Format appointment response
     const appointmentStatus = appointments.map(appt => {
-      const doctorName = doctorMap.get(appt.doctor.toString()) || 'Doctor not found';
+      const doctorName = doctorMap.get(appt.doctor?.toString()) || 'Doctor not found';
+      const isCancelled = appt.status === 'cancelled';
+      const cancellation = appt.cancellation || {};
+
+      let cancellationDetails = null;
+
+      if (isCancelled) {
+        const by = cancellation.by;
+        const isByPatient = by === 'patient';
+        const isByAdmin = by === 'admin';
+
+        cancellationDetails = {
+          cancelledBy: isByPatient ? 'You' : isByAdmin ? 'Admin' : 'Unknown',
+          reasonForCancellation: cancellation.reason || 'Not provided',
+          cancelledOn: cancellation.date || null,
+        };
+      }
 
       return {
         appointmentId: appt._id,
@@ -314,6 +352,7 @@ exports.getMyAppointmentStatus = async (req, res) => {
         status: appt.status,
         reason: appt.reason,
         timeSlot: appt.timeSlot,
+        ...(cancellationDetails && { cancellationDetails }),
       };
     });
 

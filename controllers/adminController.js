@@ -7,31 +7,6 @@ const Log = require('../models/logsModel');
 const transport = require("../middlewares/sendMail");
 
 // Admin Dashboard Overview
-exports.getAdminDashboardData = async (req, res) => {
-  try {
-    const today = new Date();
-
-    const todayAppointments = await Appointment.countDocuments({
-      scheduledDateTime: { $gte: today },
-    });
-    const totalPatients = await User.countDocuments({ role: "patient" });
-    const sessionsToday = await Appointment.countDocuments({
-      sessionDate: { $gte: today },
-    });
-    const pendingReports = await Appointment.countDocuments({
-      reportStatus: "pending",
-    });
-
-    res.json({
-      todayAppointments,
-      totalPatients,
-      sessionsToday,
-      pendingReports,
-    });
-  } catch (error) {
-    res.status(500).json({ message: "Error fetching admin dashboard data" });
-  }
-};
 
 exports.getAllAppointmentsForAdmin = async (req, res) => {
   try {
@@ -39,27 +14,24 @@ exports.getAllAppointmentsForAdmin = async (req, res) => {
     const filter = status ? { status } : {};
 
     const appointments = await Appointment.find(filter)
-      .populate("patient", "fullName email") // Removed contactNumber (not in User schema)
+      .populate("patient", "fullName email")
       .lean();
 
     if (!appointments.length) {
       return res.status(404).json({ message: "No appointments found." });
     }
 
-    const doctorIds = [
-      ...new Set(appointments.map((a) => a.doctor?.toString())),
-    ];
-    const patientUserIds = [
-      ...new Set(appointments.map((a) => a.patient?._id?.toString())),
-    ];
+    const doctorIds = [...new Set(appointments.map((a) => a.doctor?.toString()))];
+    const patientUserIds = [...new Set(appointments.map((a) => a.patient?._id?.toString()))];
 
-    // Get doctor profiles
-    const profiles = await DoctorProfile.find({ doctor: { $in: doctorIds } })
+    const doctorProfiles = await DoctorProfile.find({ doctor: { $in: doctorIds } })
       .populate("doctor", "email")
       .lean();
 
+    const patientProfiles = await PatientProfile.find({ user: { $in: patientUserIds } }).lean();
+
     const doctorMap = Object.fromEntries(
-      profiles.map((p) => [
+      doctorProfiles.map((p) => [
         p.doctor._id.toString(),
         {
           name: p.fullName || "Unknown",
@@ -67,11 +39,6 @@ exports.getAllAppointmentsForAdmin = async (req, res) => {
         },
       ])
     );
-
-    // Get patient profiles
-    const patientProfiles = await PatientProfile.find({
-      user: { $in: patientUserIds },
-    }).lean();
 
     const patientMap = Object.fromEntries(
       patientProfiles.map((p) => [
@@ -86,6 +53,8 @@ exports.getAllAppointmentsForAdmin = async (req, res) => {
     const result = appointments.map((appt) => {
       const patientId = appt.patient?._id?.toString();
       const patientInfo = patientMap[patientId] || {};
+      const doctorInfo = doctorMap[appt.doctor?.toString()] || {};
+      const cancellation = appt.cancellation || {};
 
       return {
         appointmentId: appt._id,
@@ -96,13 +65,19 @@ exports.getAllAppointmentsForAdmin = async (req, res) => {
           contactNumber: patientInfo.contact || null,
         },
         doctorId: appt.doctor,
-        doctorName:
-          doctorMap[appt.doctor?.toString()]?.name || "Doctor not found",
-        doctorEmail: doctorMap[appt.doctor?.toString()]?.email || null,
+        doctorName: doctorInfo.name || "Doctor not found",
+        doctorEmail: doctorInfo.email || null,
         scheduledDateTime: appt.scheduledDateTime,
-        status: appt.status,
-        reason: appt.reason,
         timeSlot: appt.timeSlot,
+        status: appt.status,
+        reason: appt.reason || null,
+        ...(appt.status === "cancelled" && {
+          cancellation: {
+            by: cancellation.by ?? "not specified",
+            reason: cancellation.reason ?? "not provided",
+            date: cancellation.date ?? null,
+          },
+        }),
       };
     });
 
@@ -214,8 +189,13 @@ exports.confirmAppointment = async (req, res) => {
 exports.cancelAppointment = async (req, res) => {
   try {
     const { appointmentId } = req.params;
+    const { message } = req.body; // The cancellation reason/message provided
 
-    // Find the appointment by ID and populate patient
+    if (!message || message.trim() === "") {
+      return res.status(400).json({ message: "Cancellation message is required." });
+    }
+
+    // Find the appointment by ID and populate patient details
     const appointment = await Appointment.findById(appointmentId).populate('patient');
     if (!appointment) {
       await Log.create({
@@ -230,6 +210,7 @@ exports.cancelAppointment = async (req, res) => {
       return res.status(404).json({ message: "Appointment not found." });
     }
 
+    // Check if appointment is already cancelled
     if (appointment.status === "cancelled") {
       await Log.create({
         action: 'APPOINTMENT_ALREADY_CANCELLED',
@@ -243,10 +224,21 @@ exports.cancelAppointment = async (req, res) => {
       return res.status(400).json({ message: "Appointment is already cancelled." });
     }
 
-    // Cancel the appointment
+    // Determine who is cancelling the appointment
+    const cancellationBy = req.user?.role === 'admin' ? 'admin' : req.user?.role;
+
+    // Set cancellation details
     appointment.status = "cancelled";
+    appointment.cancellation = {
+      by: cancellationBy,
+      reason: message,
+      date: new Date(),
+    };
+
+    // Save the appointment with updated cancellation details
     await appointment.save();
 
+    // Log the cancellation action
     await Log.create({
       action: 'APPOINTMENT_CANCELLED',
       email: req.user?.email || 'unknown',
@@ -254,10 +246,10 @@ exports.cancelAppointment = async (req, res) => {
       ip: req.ip,
       endpoint: req.originalUrl,
       appointmentId,
-      message: 'Appointment cancelled successfully.',
+      message: `Appointment cancelled. Reason: ${message}`,
     });
 
-    // Send cancellation email
+    // Send cancellation email to the patient
     const patientEmail = appointment.patient?.email;
     if (patientEmail) {
       await transport.sendMail({
@@ -267,8 +259,8 @@ exports.cancelAppointment = async (req, res) => {
         html: `
           <h3>Your Appointment Has Been Cancelled</h3>
           <p>Dear ${appointment.patient?.name || "Patient"},</p>
-          <p>Your appointment has been cancelled.</p>
-          <p>Please contact us to rebook at your convenience.</p>
+          <p>We regret to inform you that your appointment has been cancelled. Reason: ${message}</p>
+          <p>If you have any questions or wish to reschedule, please contact us.</p>
           <p>Thank you!</p>
         `
       });
@@ -276,11 +268,13 @@ exports.cancelAppointment = async (req, res) => {
 
     res.status(200).json({
       message: "Appointment cancelled successfully.",
+      cancellationMessage: message,
       appointment,
     });
   } catch (error) {
     console.error("Error cancelling appointment:", error);
 
+    // Log the error if cancelling fails
     await Log.create({
       action: 'APPOINTMENT_CANCEL_ERROR',
       email: req.user?.email || 'unknown',
@@ -295,7 +289,6 @@ exports.cancelAppointment = async (req, res) => {
     res.status(500).json({ message: "Error cancelling appointment." });
   }
 };
-
 
 exports.rescheduleAppointment = async (req, res) => {
   try {

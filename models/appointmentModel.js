@@ -16,34 +16,45 @@ const appointmentSchema = new Schema({
   },
   patient: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User', // Assuming you're using a 'User' model for patients
+    ref: 'User',
     required: true,
   },
   doctor: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User', // Assuming you're using a 'User' model for doctors
+    ref: 'User',
     required: true,
   },
   contactInfo: {
     phone: {
       type: String,
-      required: true, // Add validation for phone number if needed
+      required: true,
     },
     email: {
       type: String,
-      required: true, // Add validation for email if needed
+      required: true,
       match: [/^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$/, 'Please enter a valid email address'],
     },
   },
   status: {
     type: String,
-    enum: ['pending', 'confirmed','rescheduled', 'cancelled'],
+    enum: ['pending', 'confirmed', 'rescheduled', 'cancelled'],
     default: 'pending',
   },
-  cancellationNote: {
-    type: String,
-    default: null,
-  },  
+  cancellation: {
+    by: {
+      type: String,
+      enum: ['patient', 'doctor'],
+      default: null,
+    },
+    reason: {
+      type: String,
+      default: null,
+    },
+    date: {
+      type: Date,
+      default: null,
+    },
+  },
 });
 
 module.exports = mongoose.model('Appointment', appointmentSchema);
